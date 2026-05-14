@@ -5,7 +5,7 @@ esphome:
 esp32:
   board: esp32dev
   framework:
-    type: arduino
+    type: esp-idf
 
 external_components:
   - source:
@@ -14,5 +14,11 @@ external_components:
 
 logger:
 
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
 inkplate13:
   id: my_inkplate13
+  cs_pin: GPIO15

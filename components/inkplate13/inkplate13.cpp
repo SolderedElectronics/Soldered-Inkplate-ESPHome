@@ -6,11 +6,11 @@ namespace esphome::inkplate13 {
 static const char *TAG = "inkplate13.component";
 
 void Inkplate13::setup() {
-  return;
+  this->spi_setup(); // Required to initialize this SPI device
 }
 
 void Inkplate13::loop() {
-  return;
+  
 }
 
 void Inkplate13::dump_config() {
