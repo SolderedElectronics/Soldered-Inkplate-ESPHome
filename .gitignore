@@ -53,3 +53,5 @@ dkms.conf
 
 # debug information files
 *.dwo
+/.esphome
+/components/inkplate13/__pycache__
