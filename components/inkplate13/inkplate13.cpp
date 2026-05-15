@@ -1,20 +1,273 @@
+#include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include "inkplate13.h"
+#include "registers.h"
 
 namespace esphome::inkplate13 {
 
-static const char *TAG = "inkplate13.component";
+static const char *TAG = "inkplate13";
 
 void Inkplate13::setup() {
-  this->spi_setup(); // Required to initialize this SPI device
+  ESP_LOGI(TAG, "setup() start");
+  initialize_();
+  ESP_LOGI(TAG, "setup() done");
 }
 
-void Inkplate13::loop() {
-  
+void Inkplate13::loop() {}
+
+void Inkplate13::update() {
+  ESP_LOGI(TAG, "update() start");
+  this->do_update_();
+  this->display();
+  ESP_LOGI(TAG, "update() done");
 }
 
 void Inkplate13::dump_config() {
-  ESP_LOGCONFIG(TAG, "Inkplate 13");
+  ESP_LOGCONFIG(TAG, "Inkplate 13 Spectra");
 }
 
+void Inkplate13::draw_absolute_pixel_internal(int x, int y, Color color) {
+  if (x >= get_width_internal() || y >= get_height_internal() || x < 0 || y < 0)
+    return;
+  uint32_t pos = (x / 2) + y * (get_width_internal() / 2);
+  uint8_t current = this->buffer_[pos];
+  uint8_t cv = map_color_to_palette_(color);
+  if (x % 2 == 0)
+    this->buffer_[pos] = (current & 0x0F) | (cv << 4);
+  else
+    this->buffer_[pos] = (current & 0xF0) | cv;
 }
+
+uint8_t Inkplate13::map_color_to_palette_(Color color) {
+  uint8_t r = color.red, g = color.green, b = color.blue;
+  if (r > 200 && g > 200 && b > 200)                       return 0x01;  // WHITE
+  if (r < 50  && g < 50  && b < 50)                        return 0x00;  // BLACK
+  if (r > 150 && g < 100 && b < 100)                       return 0x04;  // RED
+  if (r < 100 && g > 150 && b < 100)                       return 0x02;  // GREEN
+  if (r < 100 && g < 100 && b > 150)                       return 0x03;  // BLUE
+  if (r > 200 && g > 80 && g < 200 && b < 80)              return 0x06;  // ORANGE
+  if (r > 150 && g > 150 && b < 100)                       return 0x05;  // YELLOW
+  return 0x00;
+}
+
+void Inkplate13::initialize_() {
+  ESP_LOGI(TAG, "allocating buffer");
+  RAMAllocator<uint8_t> allocator;
+  size_t buffer_size = (size_t) get_width_internal() * get_height_internal() / 2;
+
+  if (this->buffer_ != nullptr)
+    allocator.deallocate(this->buffer_, buffer_size);
+
+  ESP_LOGI(TAG, "calling spi_setup");
+  this->spi_setup();
+  ESP_LOGI(TAG, "spi_setup done");
+
+  this->buffer_ = allocator.allocate(buffer_size);
+  if (this->buffer_ == nullptr) {
+    ESP_LOGE(TAG, "Failed to allocate %zu byte frame buffer", buffer_size);
+    return;
+  }
+
+  ESP_LOGI(TAG, "buffer allocated (%zu bytes)", buffer_size);
+  memset(this->buffer_, 0x11, buffer_size);  // 0x11 = white (nibble 1 = white in ACeP)
+}
+
+void Inkplate13::send_command_(uint8_t cmd, const uint8_t *data, size_t len, ChipId chip) {
+  if (chip & CHIP_MASTER) this->cs_m_pin_->digital_write(false);
+  if (chip & CHIP_SLAVE)  this->cs_s_pin_->digital_write(false);
+
+  this->enable();
+  this->write_byte(cmd);
+  if (len > 0 && data != nullptr)
+    this->write_array(data, len);
+  this->disable();
+
+  if (chip & CHIP_MASTER) this->cs_m_pin_->digital_write(true);
+  if (chip & CHIP_SLAVE)  this->cs_s_pin_->digital_write(true);
+}
+
+void Inkplate13::display(bool leave_on) {
+  if (this->buffer_ == nullptr) {
+    ESP_LOGE(TAG, "display() called with no buffer — PSRAM missing?");
+    return;
+  }
+  ESP_LOGI(TAG, "display() start");
+  set_panel_state_(true);
+  ESP_LOGI(TAG, "panel on, sending master data");
+
+  const size_t rows          = get_height_internal();
+  const size_t bytes_per_row = get_width_internal() / 2;
+  const size_t half          = bytes_per_row / 2;
+
+  this->cs_m_pin_->digital_write(false);
+  this->enable();
+  this->write_byte(REG_DTM);
+  for (size_t i = 0; i < rows; i++)
+    this->write_array(this->buffer_ + i * bytes_per_row, half);
+  this->disable();
+  this->cs_m_pin_->digital_write(true);
+  ESP_LOGI(TAG, "master data sent, waiting busy");
+
+  wait_for_busy_();
+  ESP_LOGI(TAG, "sending slave data");
+
+  this->cs_s_pin_->digital_write(false);
+  this->enable();
+  this->write_byte(REG_DTM);
+  for (size_t i = 0; i < rows; i++)
+    this->write_array(this->buffer_ + i * bytes_per_row + half, half);
+  this->disable();
+  this->cs_s_pin_->digital_write(true);
+  ESP_LOGI(TAG, "slave data sent, waiting busy");
+
+  wait_for_busy_();
+  ESP_LOGI(TAG, "sending DRF");
+
+  send_command_(REG_DRF, REG_DRF_V, sizeof(REG_DRF_V), CHIP_BOTH);
+  wait_for_busy_();
+  ESP_LOGI(TAG, "display() done");
+
+  if (!leave_on)
+    set_panel_state_(false);
+}
+
+
+void Inkplate13::set_panel_state_(bool state) {
+  ESP_LOGI(TAG, "set_panel_state_(%d), current=%d", state, this->panel_state_);
+  if (state == this->panel_state_)
+    return;
+
+  if (state) {
+    ESP_LOGI(TAG, "pins to low");
+    set_panel_pins_to_low_();
+    delay(50);
+    ESP_LOGI(TAG, "set_io");
+    set_io_();
+    this->pwr_en_pin_->digital_write(true);
+    delay(100);
+    ESP_LOGI(TAG, "reset panel");
+    reset_panel_();
+    delay(100);
+    ESP_LOGI(TAG, "screen_init");
+    screen_init_();
+    ESP_LOGI(TAG, "PON");
+    send_command_(REG_PON, nullptr, 0, CHIP_BOTH);
+    ESP_LOGI(TAG, "wait busy after PON");
+    wait_for_busy_();
+    ESP_LOGI(TAG, "panel on done");
+  } else {
+    send_command_(REG_POF, REG_POF_V, sizeof(REG_POF_V), CHIP_BOTH);
+    wait_for_busy_();
+    this->dc_pin_->pin_mode(gpio::FLAG_INPUT);
+    this->cs_m_pin_->pin_mode(gpio::FLAG_INPUT);
+    this->cs_s_pin_->pin_mode(gpio::FLAG_INPUT);
+    this->rst_pin_->pin_mode(gpio::FLAG_INPUT);
+    this->busy_pin_->pin_mode(gpio::FLAG_INPUT);
+    this->pwr_en_pin_->pin_mode(gpio::FLAG_INPUT);
+    this->pwr_en_pin_->digital_write(false);
+  }
+
+  this->panel_state_ = state;
+}
+
+bool Inkplate13::set_panel_deep_sleep_(bool state) {
+  if (state) {
+    send_command_(REG_POF, REG_POF_V, sizeof(REG_POF_V), CHIP_BOTH);
+    wait_for_busy_();
+    this->rst_pin_->digital_write(false);
+    this->panel_state_ = false;
+  } else {
+    set_panel_pins_to_low_();
+    delay(50);
+    set_io_();
+    this->pwr_en_pin_->digital_write(true);
+    delay(100);
+    reset_panel_();
+    delay(100);
+    screen_init_();
+    send_command_(REG_PON, nullptr, 0, CHIP_BOTH);
+    wait_for_busy_();
+    this->panel_state_ = true;
+  }
+  return true;
+}
+
+void Inkplate13::screen_init_() {
+  send_command_(REG_AN_TM,           REG_AN_TM_V,           sizeof(REG_AN_TM_V),           CHIP_MASTER);
+  send_command_(REG_CMD66,           REG_CMD66_V,           sizeof(REG_CMD66_V),           CHIP_BOTH);
+  send_command_(REG_PSR,             REG_PSR_V,             sizeof(REG_PSR_V),             CHIP_BOTH);
+  send_command_(REG_PLL,             REG_PLL_V,             sizeof(REG_PLL_V),             CHIP_BOTH);
+  send_command_(REG_CDI,             REG_CDI_V,             sizeof(REG_CDI_V),             CHIP_BOTH);
+  send_command_(REG_TCON,            REG_TCON_V,            sizeof(REG_TCON_V),            CHIP_BOTH);
+  send_command_(REG_AGID,            REG_AGID_V,            sizeof(REG_AGID_V),            CHIP_BOTH);
+  send_command_(REG_PWS,             REG_PWS_V,             sizeof(REG_PWS_V),             CHIP_BOTH);
+  send_command_(REG_CCSET,           REG_CCSET_V,           sizeof(REG_CCSET_V),           CHIP_BOTH);
+  send_command_(REG_TRES,            REG_TRES_V,            sizeof(REG_TRES_V),            CHIP_BOTH);
+  send_command_(REG_PWR,             REG_PWR_V,             sizeof(REG_PWR_V),             CHIP_MASTER);
+  send_command_(REG_EN_BUF,          REG_EN_BUF_V,          sizeof(REG_EN_BUF_V),          CHIP_MASTER);
+  send_command_(REG_BTST_P,          REG_BTST_P_V,          sizeof(REG_BTST_P_V),          CHIP_MASTER);
+  send_command_(REG_BOOST_VDDP_EN,   REG_BOOST_VDDP_EN_V,   sizeof(REG_BOOST_VDDP_EN_V),   CHIP_MASTER);
+  send_command_(REG_BTST_N,          REG_BTST_N_V,          sizeof(REG_BTST_N_V),          CHIP_MASTER);
+  send_command_(REG_BUCK_BOOST_VDDN, REG_BUCK_BOOST_VDDN_V, sizeof(REG_BUCK_BOOST_VDDN_V), CHIP_MASTER);
+  send_command_(REG_TFT_VCOM_POWER,  REG_TFT_VCOM_POWER_V,  sizeof(REG_TFT_VCOM_POWER_V),  CHIP_MASTER);
+}
+
+void Inkplate13::set_io_() {
+  this->rst_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->dc_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->cs_m_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->cs_s_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->busy_pin_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
+  this->pwr_en_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->bs0_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->bs1_pin_->pin_mode(gpio::FLAG_OUTPUT);
+
+  this->dc_pin_->digital_write(true);
+  this->cs_m_pin_->digital_write(true);
+  this->cs_s_pin_->digital_write(true);
+  this->rst_pin_->digital_write(false);
+  this->pwr_en_pin_->digital_write(false);
+  this->bs0_pin_->digital_write(false);
+  this->bs1_pin_->digital_write(true);
+}
+
+void Inkplate13::set_panel_pins_to_low_() {
+  this->rst_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->dc_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->cs_m_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->cs_s_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->busy_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->pwr_en_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->bs0_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  this->bs1_pin_->pin_mode(gpio::FLAG_OUTPUT);
+
+  this->rst_pin_->digital_write(false);
+  this->dc_pin_->digital_write(false);
+  this->cs_m_pin_->digital_write(false);
+  this->cs_s_pin_->digital_write(false);
+  this->busy_pin_->digital_write(false);
+  this->pwr_en_pin_->digital_write(false);
+  this->bs0_pin_->digital_write(false);
+  this->bs1_pin_->digital_write(false);
+}
+
+void Inkplate13::reset_panel_() {
+  this->rst_pin_->digital_write(false);
+  delay(100);
+  this->rst_pin_->digital_write(true);
+  delay(100);
+}
+
+void Inkplate13::wait_for_busy_() {
+  uint32_t start = millis();
+  while (!this->busy_pin_->digital_read()) {
+    if (millis() - start > 30000) {
+      ESP_LOGE(TAG, "wait_for_busy_ timeout");
+      return;
+    }
+    delay(1);
+    App.feed_wdt();
+  }
+}
+
+}  // namespace esphome::inkplate13

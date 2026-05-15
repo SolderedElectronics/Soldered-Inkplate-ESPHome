@@ -3,22 +3,52 @@ esphome:
   friendly_name: Inkplate 13 Test
 
 esp32:
-  board: esp32dev
   framework:
     type: esp-idf
+  variant: esp32s3
 
 external_components:
   - source:
       type: local
       path: components
 
+psram:
+  mode: octal
+  speed: 80MHz
+
 logger:
+  baud_rate: 115200
+  hardware_uart: UART0
 
 spi:
-  clk_pin: GPIO18
-  mosi_pin: GPIO23
-  miso_pin: GPIO19
+  - id: spi_dummy
+    clk_pin: GPIO47
+    mosi_pin: GPIO48
+  - id: spi_display
+    clk_pin: GPIO38
+    mosi_pin: GPIO40
+    miso_pin: GPIO41
 
-inkplate13:
+display:
+  platform: inkplate13
   id: my_inkplate13
-  cs_pin: GPIO15
+  spi_id: spi_display
+  cs_m_pin: GPIO42
+  cs_s_pin: GPIO39
+  rst_pin: GPIO4
+  dc_pin: GPIO14
+  busy_pin: GPIO7
+  pwr_en_pin: GPIO21
+  bs0_pin: GPIO6
+  bs1_pin: GPIO5
+  update_interval: 30s
+  lambda: |-
+    static bool invert = false;
+    ESP_LOGI("lambda", "called, invert=%d", (int)invert);
+    if (invert) {
+      it.fill(Color(0, 0, 0));
+    } else {
+      it.fill(Color(255, 255, 255));
+    }
+    ESP_LOGI("lambda", "fill done");
+    invert = !invert;
