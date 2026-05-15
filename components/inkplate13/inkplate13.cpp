@@ -40,13 +40,12 @@ void Inkplate13::draw_absolute_pixel_internal(int x, int y, Color color) {
 
 uint8_t Inkplate13::map_color_to_palette_(Color color) {
   uint8_t r = color.red, g = color.green, b = color.blue;
-  if (r > 200 && g > 200 && b > 200)                       return 0x01;  // WHITE
-  if (r < 50  && g < 50  && b < 50)                        return 0x00;  // BLACK
-  if (r > 150 && g < 100 && b < 100)                       return 0x04;  // RED
-  if (r < 100 && g > 150 && b < 100)                       return 0x02;  // GREEN
-  if (r < 100 && g < 100 && b > 150)                       return 0x03;  // BLUE
-  if (r > 200 && g > 80 && g < 200 && b < 80)              return 0x06;  // ORANGE
-  if (r > 150 && g > 150 && b < 100)                       return 0x05;  // YELLOW
+  if (r > 200 && g > 200 && b > 200)              return 0x01;  // WHITE
+  if (r < 50  && g < 50  && b < 50)               return 0x00;  // BLACK
+  if (r > 150 && g < 100 && b < 100)              return 0x03;  // RED
+  if (r < 100 && g > 150 && b < 100)              return 0x06;  // GREEN
+  if (r < 100 && g < 100 && b > 150)              return 0x05;  // BLUE
+  if (r > 150 && g > 150 && b < 100)              return 0x02;  // YELLOW
   return 0x00;
 }
 
@@ -131,6 +130,127 @@ void Inkplate13::display(bool leave_on) {
     set_panel_state_(false);
 }
 
+
+void Inkplate13::display_partial(int x, int y, int w, int h, bool leave_on) {
+  if (this->buffer_ == nullptr) return;
+
+  // Clip to logical screen bounds
+  if (x < 0) { w += x; x = 0; }
+  if (y < 0) { h += y; y = 0; }
+  if (x + w > (int) this->get_width())  w = (int) this->get_width()  - x;
+  if (y + h > (int) this->get_height()) h = (int) this->get_height() - y;
+  if (w <= 0 || h <= 0) return;
+
+  const int16_t W = (int16_t) get_width_internal();   // 1200
+  const int16_t H = (int16_t) get_height_internal();  // 1600
+
+  // Map logical (rotated) region → physical (panel-native) col/row
+  int16_t colStart, colEnd, rowStart, rowEnd;
+  switch ((int) this->rotation_) {
+    case 90:
+      colStart = W - y - h;  colEnd = W - 1 - y;
+      rowStart = x;          rowEnd = x + w - 1;
+      break;
+    case 180:
+      colStart = x;          colEnd = x + w - 1;
+      rowStart = y;          rowEnd = y + h - 1;
+      break;
+    case 270:
+      colStart = y;          colEnd = y + h - 1;
+      rowStart = H - x - w;  rowEnd = H - 1 - x;
+      break;
+    default:  // 0
+      colStart = W - x - w;  colEnd = W - 1 - x;
+      rowStart = H - y - h;  rowEnd = H - 1 - y;
+      break;
+  }
+
+  // PTLW alignment: cols → multiples of 4, rows → even
+  colStart = (colStart / 4) * 4;
+  colEnd   = (((colEnd + 4) / 4) * 4) - 1;
+  if (colEnd   >= W) colEnd   = W - 1;
+  if (rowStart %  2) rowStart--;
+  if (rowStart <  0) rowStart = 0;
+  if ((rowEnd + 1) % 2) rowEnd++;
+  if (rowEnd   >= H) rowEnd   = H - 1;
+
+  ESP_LOGI(TAG, "display_partial col=%d-%d row=%d-%d", colStart, colEnd, rowStart, rowEnd);
+  set_panel_state_(true);
+
+  const int16_t HALF_W     = W / 2;    // 600 px per chip
+  const int16_t HALF_BYTES = HALF_W / 2;  // 300 bytes per row per chip
+
+  bool masterNeeded = (colStart < HALF_W);
+  bool slaveNeeded  = (colEnd  >= HALF_W);
+
+  static const uint8_t ptlwNull[9] = {
+    0x00, 0x00,  // HRST = 0
+    0x00, 0x07,  // HRED = 7
+    0x00, 0x00,  // VRST = 0
+    0x00, 0x01,  // VRED = 1
+    0x01         // PT   = 1
+  };
+
+  auto send_ptlw_dtm = [&](bool isMaster, bool needed) {
+    GPIOPin *cs = isMaster ? this->cs_m_pin_ : this->cs_s_pin_;
+    ChipId chip = isMaster ? CHIP_MASTER : CHIP_SLAVE;
+
+    uint8_t ptlwData[9];
+    int16_t bytesPerRow, memColOff, rStart, rEnd;
+
+    if (needed) {
+      int16_t lcs = isMaster ? colStart : ((colStart >= HALF_W) ? colStart - HALF_W : 0);
+      int16_t lce = isMaster
+                    ? ((colEnd < HALF_W) ? colEnd : HALF_W - 1)
+                    : (colEnd - HALF_W);
+      uint16_t HRST = (uint16_t) lcs * 2;
+      uint16_t HRED = (uint16_t)(lce + 1) * 2 - 1;
+      uint16_t VRST = (uint16_t) rowStart / 2;
+      uint16_t VRED = (uint16_t)(rowEnd + 1) / 2 - 1;
+      ptlwData[0] = HRST >> 8; ptlwData[1] = HRST & 0xFF;
+      ptlwData[2] = HRED >> 8; ptlwData[3] = HRED & 0xFF;
+      ptlwData[4] = VRST >> 8; ptlwData[5] = VRST & 0xFF;
+      ptlwData[6] = VRED >> 8; ptlwData[7] = VRED & 0xFF;
+      ptlwData[8] = 0x01;
+      bytesPerRow = (lce - lcs + 1) / 2;
+      memColOff   = isMaster ? (lcs / 2) : (HALF_BYTES + lcs / 2);
+      rStart = rowStart; rEnd = rowEnd;
+    } else {
+      memcpy(ptlwData, ptlwNull, 9);
+      bytesPerRow = 2;
+      memColOff   = isMaster ? 0 : HALF_BYTES;
+      rStart = 0; rEnd = 3;
+    }
+
+    send_command_(REG_CMD66, REG_CMD66_V, sizeof(REG_CMD66_V), chip);
+
+    cs->digital_write(false);
+    this->enable();
+    this->write_byte(REG_PTLW);
+    this->write_array(ptlwData, 9);
+    this->disable();
+    cs->digital_write(true);
+
+    cs->digital_write(false);
+    this->enable();
+    this->write_byte(REG_DTM);
+    for (int16_t row = rStart; row <= rEnd; row++)
+      this->write_array(this->buffer_ + row * (W / 2) + memColOff, bytesPerRow);
+    this->disable();
+    cs->digital_write(true);
+  };
+
+  send_ptlw_dtm(true,  masterNeeded);
+  wait_for_busy_();
+  send_ptlw_dtm(false, slaveNeeded);
+  wait_for_busy_();
+
+  send_command_(REG_DRF, REG_DRF_V, sizeof(REG_DRF_V), CHIP_BOTH);
+  wait_for_busy_();
+  ESP_LOGI(TAG, "display_partial done");
+
+  if (!leave_on) set_panel_state_(false);
+}
 
 void Inkplate13::set_panel_state_(bool state) {
   ESP_LOGI(TAG, "set_panel_state_(%d), current=%d", state, this->panel_state_);

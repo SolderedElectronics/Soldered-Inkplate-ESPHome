@@ -20,6 +20,10 @@ logger:
   baud_rate: 115200
   hardware_uart: UART0
 
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
 spi:
   - id: spi_dummy
     clk_pin: GPIO47
@@ -28,6 +32,26 @@ spi:
     clk_pin: GPIO38
     mosi_pin: GPIO40
     miso_pin: GPIO41
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 72
+  - file: "gfonts://Roboto"
+    id: font_value
+    size: 88
+  - file: "gfonts://Roboto"
+    id: font_label
+    size: 32
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 24
+
+image:
+  - file: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTB22PkuG-4Q2Ugt6nnmuXjkSsIOpUFJIn4xw&s"
+    id: sidebar_image
+    type: RGB
+    resize: 300x300
 
 display:
   platform: inkplate13
@@ -41,14 +65,115 @@ display:
   pwr_en_pin: GPIO21
   bs0_pin: GPIO6
   bs1_pin: GPIO5
-  update_interval: 30s
+  rotation: 270
+  update_interval: 60s
   lambda: |-
-    static bool invert = false;
-    ESP_LOGI("lambda", "called, invert=%d", (int)invert);
-    if (invert) {
-      it.fill(Color(0, 0, 0));
+    // Logical canvas after rotation: 1600 x 1200
+    const int W = it.get_width();
+    const int H = it.get_height();
+
+    const Color C_BLACK  = Color(0,   0,   0  );
+    const Color C_WHITE  = Color(255, 255, 255);
+    const Color C_RED    = Color(255, 0,   0  );
+    const Color C_GREEN  = Color(0,   200, 0  );
+    const Color C_BLUE   = Color(0,   0,   255);
+    const Color C_YELLOW = Color(255, 255, 0  );
+
+    const float kPi = 3.14159265f;
+
+    // Helper: semicircle arc gauge
+    // cx,cy = center of flat base; r = outer radius; thick = arc thickness
+    auto arc_gauge = [&](int cx, int cy, int r, int thick, float pct, Color fill_color) {
+      float step = 1.0f / r;  // ~1 pixel per step, no gaps
+      float fill_end = kPi + pct * kPi;
+      // Thin black background arc
+      for (int t = 0; t < 4; t++) {
+        for (float rad = kPi; rad <= 2.0f * kPi + step; rad += step) {
+          it.draw_pixel_at(cx + (int)((r-t) * cosf(rad)),
+                           cy + (int)((r-t) * sinf(rad)), C_BLACK);
+        }
+      }
+      // Thick colored value arc
+      for (int t = 0; t < thick; t++) {
+        for (float rad = kPi; rad <= fill_end; rad += step) {
+          it.draw_pixel_at(cx + (int)((r-t) * cosf(rad)),
+                           cy + (int)((r-t) * sinf(rad)), fill_color);
+        }
+      }
+      it.horizontal_line(cx - r, cy, 2*r + 1, C_BLACK);
+      it.filled_circle(cx, cy, thick / 2, C_BLACK);
+    };
+
+    // Helper: sensor card with arc gauge
+    auto sensor_card = [&](int x, int y, int w, int h,
+                           const char *label, const char *value, const char *unit,
+                           float pct, Color bar_color) {
+      it.rectangle(x,   y,   w,   h,   C_BLACK);
+      it.rectangle(x+1, y+1, w-2, h-2, C_BLACK);
+      it.filled_rectangle(x, y, w, 48, C_BLACK);
+      it.print(x + 14, y + 8, id(font_label), C_WHITE, label);
+
+      int cx = x + w / 2;
+      int cy = y + 230;
+      arc_gauge(cx, cy, 130, 24, pct, bar_color);
+
+      // Value + unit on same line
+      char val_buf[32];
+      snprintf(val_buf, sizeof(val_buf), "%s%s", value, unit);
+      it.print(cx, y + 340, id(font_value), C_BLACK,
+               display::TextAlign::CENTER, val_buf);
+    };
+
+    // ── Background ──────────────────────────────────────
+    it.fill(C_WHITE);
+
+    // ── Header ──────────────────────────────────────────
+    it.filled_rectangle(0, 0, W, 86, C_BLACK);
+    it.print(28,  6,  id(font_title), C_WHITE,  "Inkplate 13 Spectra");
+    it.print(870, 28, id(font_label), C_YELLOW, "6-color ACeP  |  13.3\"  |  1200x1600");
+    if (wifi::global_wifi_component->is_connected()) {
+      it.print(1460, 28, id(font_label), C_GREEN, "WiFi OK");
     } else {
-      it.fill(Color(255, 255, 255));
+      it.print(1440, 28, id(font_label), C_RED,   "No WiFi");
     }
-    ESP_LOGI("lambda", "fill done");
-    invert = !invert;
+
+    // ── Sidebar ─────────────────────────────────────────
+    const int SB = 20;
+    const int SH = 48, SG = 8;
+    it.print(SB, 104, id(font_small), C_BLACK, "COLOR PALETTE");
+    int sy = 134;
+    Color swatches[] = {C_BLACK, C_WHITE, C_RED, C_GREEN, C_BLUE, C_YELLOW};
+    const char *snames[] = {"Black", "White", "Red", "Green", "Blue", "Yellow"};
+    for (int i = 0; i < 6; i++) {
+      it.filled_rectangle(SB, sy + i*(SH+SG), 120, SH, swatches[i]);
+      it.rectangle(SB, sy + i*(SH+SG), 120, SH, C_BLACK);
+      it.print(SB + 134, sy + i*(SH+SG) + 12, id(font_small), C_BLACK, snames[i]);
+    }
+
+    // Image below swatches
+    it.image(SB, 490, id(sidebar_image));
+
+    // Sidebar divider
+    it.vertical_line(350, 96, H - 96, C_BLACK);
+    it.vertical_line(351, 96, H - 96, C_BLACK);
+
+    // ── Sensor cards (2x2 grid) ─────────────────────────
+    const int CX1 = 370, CX2 = 980;
+    const int CY1 = 100, CY2 = 630;
+    const int CW  = 590, CH  = 500;
+
+    sensor_card(CX1, CY1, CW, CH,
+                "TEMPERATURE", "23.4", "\xc2\xb0""C",
+                23.4f / 50.0f, C_RED);
+
+    sensor_card(CX2, CY1, CW, CH,
+                "HUMIDITY",    "62",   "%",
+                0.62f, C_BLUE);
+
+    sensor_card(CX1, CY2, CW, CH,
+                "CO2",         "847",  "ppm",
+                847.0f / 2000.0f, C_YELLOW);
+
+    sensor_card(CX2, CY2, CW, CH,
+                "BATTERY",     "78",   "%",
+                0.78f, C_GREEN);

@@ -22,6 +22,7 @@ class Inkplate13 : public display::DisplayBuffer,
   void update() override;
 
   void display(bool leave_on = true);
+  void display_partial(int x, int y, int w, int h, bool leave_on = false);
 
   display::DisplayType get_display_type() override {
     return display::DisplayType::DISPLAY_TYPE_COLOR;
