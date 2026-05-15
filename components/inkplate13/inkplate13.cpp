@@ -18,7 +18,6 @@ void Inkplate13::loop() {}
 void Inkplate13::update() {
   ESP_LOGI(TAG, "update() start");
   this->do_update_();
-  this->display();
   ESP_LOGI(TAG, "update() done");
 }
 
@@ -381,7 +380,7 @@ void Inkplate13::reset_panel_() {
 void Inkplate13::wait_for_busy_() {
   uint32_t start = millis();
   while (!this->busy_pin_->digital_read()) {
-    if (millis() - start > 30000) {
+    if (millis() - start > 45000) {
       ESP_LOGE(TAG, "wait_for_busy_ timeout");
       return;
     }

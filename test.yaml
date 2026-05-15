@@ -177,3 +177,21 @@ display:
     sensor_card(CX2, CY2, CW, CH,
                 "BATTERY",     "78",   "%",
                 0.78f, C_GREEN);
+
+    // Counter strip — always drawn into buffer
+    static int update_count = 0;
+    update_count++;
+    char count_buf[48];
+    snprintf(count_buf, sizeof(count_buf), "Refresh #%d  (%s)",
+             update_count, (update_count % 6 == 1) ? "FULL" : "partial");
+    const int PX = 370, PY = 1160, PW = 1200, PH = 40;
+    it.filled_rectangle(PX, PY, PW, PH, C_WHITE);
+    it.print(PX + 8, PY + 4, id(font_small), C_BLACK, count_buf);
+
+    // Pattern: full on count 1, 7, 13 … (every 6th); 5 partials in between
+    auto &panel = static_cast<esphome::inkplate13::Inkplate13 &>(it);
+    if (update_count % 6 == 1) {
+      panel.display();
+    } else {
+      panel.display_partial(PX, PY, PW, PH);
+    }
