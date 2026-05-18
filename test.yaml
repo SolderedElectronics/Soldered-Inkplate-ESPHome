@@ -9,8 +9,9 @@ esp32:
 
 external_components:
   - source:
-      type: local
-      path: components
+      type: git
+      url: https://github.com/SolderedElectronics/Soldered-Inkplate13-ESPHome
+      ref: dev
 
 psram:
   mode: octal
