@@ -3,9 +3,21 @@
 #include "inkplate13.h"
 #include "registers.h"
 
+#include "driver/gpio.h"
+
 namespace esphome::inkplate13 {
 
 static const char *TAG = "inkplate13";
+
+// Inkplate 13 Spectra fixed pin mapping
+static constexpr gpio_num_t PIN_RST    = GPIO_NUM_4;
+static constexpr gpio_num_t PIN_DC     = GPIO_NUM_14;
+static constexpr gpio_num_t PIN_BUSY   = GPIO_NUM_7;
+static constexpr gpio_num_t PIN_PWR_EN = GPIO_NUM_21;
+static constexpr gpio_num_t PIN_CS_M   = GPIO_NUM_42;
+static constexpr gpio_num_t PIN_CS_S   = GPIO_NUM_39;
+static constexpr gpio_num_t PIN_BS0    = GPIO_NUM_6;
+static constexpr gpio_num_t PIN_BS1    = GPIO_NUM_5;
 
 void Inkplate13::setup() {
   ESP_LOGI(TAG, "setup() start");
@@ -67,12 +79,12 @@ void Inkplate13::initialize_() {
   }
 
   ESP_LOGI(TAG, "buffer allocated (%zu bytes)", buffer_size);
-  memset(this->buffer_, 0x11, buffer_size);  // 0x11 = white (nibble 1 = white in ACeP)
+  memset(this->buffer_, 0x11, buffer_size);  // 0x11 = white
 }
 
 void Inkplate13::send_command_(uint8_t cmd, const uint8_t *data, size_t len, ChipId chip) {
-  if (chip & CHIP_MASTER) this->cs_m_pin_->digital_write(false);
-  if (chip & CHIP_SLAVE)  this->cs_s_pin_->digital_write(false);
+  if (chip & CHIP_MASTER) gpio_set_level(PIN_CS_M, 0);
+  if (chip & CHIP_SLAVE)  gpio_set_level(PIN_CS_S, 0);
 
   this->enable();
   this->write_byte(cmd);
@@ -80,8 +92,8 @@ void Inkplate13::send_command_(uint8_t cmd, const uint8_t *data, size_t len, Chi
     this->write_array(data, len);
   this->disable();
 
-  if (chip & CHIP_MASTER) this->cs_m_pin_->digital_write(true);
-  if (chip & CHIP_SLAVE)  this->cs_s_pin_->digital_write(true);
+  if (chip & CHIP_MASTER) gpio_set_level(PIN_CS_M, 1);
+  if (chip & CHIP_SLAVE)  gpio_set_level(PIN_CS_S, 1);
 }
 
 void Inkplate13::display(bool leave_on) {
@@ -97,25 +109,25 @@ void Inkplate13::display(bool leave_on) {
   const size_t bytes_per_row = get_width_internal() / 2;
   const size_t half          = bytes_per_row / 2;
 
-  this->cs_m_pin_->digital_write(false);
+  gpio_set_level(PIN_CS_M, 0);
   this->enable();
   this->write_byte(REG_DTM);
   for (size_t i = 0; i < rows; i++)
     this->write_array(this->buffer_ + i * bytes_per_row, half);
   this->disable();
-  this->cs_m_pin_->digital_write(true);
+  gpio_set_level(PIN_CS_M, 1);
   ESP_LOGI(TAG, "master data sent, waiting busy");
 
   wait_for_busy_();
   ESP_LOGI(TAG, "sending slave data");
 
-  this->cs_s_pin_->digital_write(false);
+  gpio_set_level(PIN_CS_S, 0);
   this->enable();
   this->write_byte(REG_DTM);
   for (size_t i = 0; i < rows; i++)
     this->write_array(this->buffer_ + i * bytes_per_row + half, half);
   this->disable();
-  this->cs_s_pin_->digital_write(true);
+  gpio_set_level(PIN_CS_S, 1);
   ESP_LOGI(TAG, "slave data sent, waiting busy");
 
   wait_for_busy_();
@@ -191,7 +203,7 @@ void Inkplate13::display_partial(int x, int y, int w, int h, bool leave_on) {
   };
 
   auto send_ptlw_dtm = [&](bool isMaster, bool needed) {
-    GPIOPin *cs = isMaster ? this->cs_m_pin_ : this->cs_s_pin_;
+    gpio_num_t cs_pin = isMaster ? PIN_CS_M : PIN_CS_S;
     ChipId chip = isMaster ? CHIP_MASTER : CHIP_SLAVE;
 
     uint8_t ptlwData[9];
@@ -223,20 +235,20 @@ void Inkplate13::display_partial(int x, int y, int w, int h, bool leave_on) {
 
     send_command_(REG_CMD66, REG_CMD66_V, sizeof(REG_CMD66_V), chip);
 
-    cs->digital_write(false);
+    gpio_set_level(cs_pin, 0);
     this->enable();
     this->write_byte(REG_PTLW);
     this->write_array(ptlwData, 9);
     this->disable();
-    cs->digital_write(true);
+    gpio_set_level(cs_pin, 1);
 
-    cs->digital_write(false);
+    gpio_set_level(cs_pin, 0);
     this->enable();
     this->write_byte(REG_DTM);
     for (int16_t row = rStart; row <= rEnd; row++)
       this->write_array(this->buffer_ + row * (W / 2) + memColOff, bytesPerRow);
     this->disable();
-    cs->digital_write(true);
+    gpio_set_level(cs_pin, 1);
   };
 
   send_ptlw_dtm(true,  masterNeeded);
@@ -262,7 +274,7 @@ void Inkplate13::set_panel_state_(bool state) {
     delay(50);
     ESP_LOGI(TAG, "set_io");
     set_io_();
-    this->pwr_en_pin_->digital_write(true);
+    gpio_set_level(PIN_PWR_EN, 1);
     delay(100);
     ESP_LOGI(TAG, "reset panel");
     reset_panel_();
@@ -277,13 +289,13 @@ void Inkplate13::set_panel_state_(bool state) {
   } else {
     send_command_(REG_POF, REG_POF_V, sizeof(REG_POF_V), CHIP_BOTH);
     wait_for_busy_();
-    this->dc_pin_->pin_mode(gpio::FLAG_INPUT);
-    this->cs_m_pin_->pin_mode(gpio::FLAG_INPUT);
-    this->cs_s_pin_->pin_mode(gpio::FLAG_INPUT);
-    this->rst_pin_->pin_mode(gpio::FLAG_INPUT);
-    this->busy_pin_->pin_mode(gpio::FLAG_INPUT);
-    this->pwr_en_pin_->pin_mode(gpio::FLAG_INPUT);
-    this->pwr_en_pin_->digital_write(false);
+    gpio_set_direction(PIN_DC,     GPIO_MODE_INPUT);
+    gpio_set_direction(PIN_CS_M,   GPIO_MODE_INPUT);
+    gpio_set_direction(PIN_CS_S,   GPIO_MODE_INPUT);
+    gpio_set_direction(PIN_RST,    GPIO_MODE_INPUT);
+    gpio_set_direction(PIN_BUSY,   GPIO_MODE_INPUT);
+    gpio_set_direction(PIN_PWR_EN, GPIO_MODE_INPUT);
+    gpio_set_level(PIN_PWR_EN, 0);
   }
 
   this->panel_state_ = state;
@@ -293,13 +305,13 @@ bool Inkplate13::set_panel_deep_sleep_(bool state) {
   if (state) {
     send_command_(REG_POF, REG_POF_V, sizeof(REG_POF_V), CHIP_BOTH);
     wait_for_busy_();
-    this->rst_pin_->digital_write(false);
+    gpio_set_level(PIN_RST, 0);
     this->panel_state_ = false;
   } else {
     set_panel_pins_to_low_();
     delay(50);
     set_io_();
-    this->pwr_en_pin_->digital_write(true);
+    gpio_set_level(PIN_PWR_EN, 1);
     delay(100);
     reset_panel_();
     delay(100);
@@ -332,54 +344,55 @@ void Inkplate13::screen_init_() {
 }
 
 void Inkplate13::set_io_() {
-  this->rst_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->dc_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->cs_m_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->cs_s_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->busy_pin_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
-  this->pwr_en_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->bs0_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->bs1_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  gpio_set_direction(PIN_RST,    GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_DC,     GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_CS_M,   GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_CS_S,   GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_BUSY,   GPIO_MODE_INPUT);
+  gpio_set_pull_mode(PIN_BUSY,   GPIO_PULLUP_ONLY);
+  gpio_set_direction(PIN_PWR_EN, GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_BS0,    GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_BS1,    GPIO_MODE_OUTPUT);
 
-  this->dc_pin_->digital_write(true);
-  this->cs_m_pin_->digital_write(true);
-  this->cs_s_pin_->digital_write(true);
-  this->rst_pin_->digital_write(false);
-  this->pwr_en_pin_->digital_write(false);
-  this->bs0_pin_->digital_write(false);
-  this->bs1_pin_->digital_write(true);
+  gpio_set_level(PIN_DC,     1);
+  gpio_set_level(PIN_CS_M,   1);
+  gpio_set_level(PIN_CS_S,   1);
+  gpio_set_level(PIN_RST,    0);
+  gpio_set_level(PIN_PWR_EN, 0);
+  gpio_set_level(PIN_BS0,    0);
+  gpio_set_level(PIN_BS1,    1);
 }
 
 void Inkplate13::set_panel_pins_to_low_() {
-  this->rst_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->dc_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->cs_m_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->cs_s_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->busy_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->pwr_en_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->bs0_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  this->bs1_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  gpio_set_direction(PIN_RST,    GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_DC,     GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_CS_M,   GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_CS_S,   GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_BUSY,   GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_PWR_EN, GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_BS0,    GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_BS1,    GPIO_MODE_OUTPUT);
 
-  this->rst_pin_->digital_write(false);
-  this->dc_pin_->digital_write(false);
-  this->cs_m_pin_->digital_write(false);
-  this->cs_s_pin_->digital_write(false);
-  this->busy_pin_->digital_write(false);
-  this->pwr_en_pin_->digital_write(false);
-  this->bs0_pin_->digital_write(false);
-  this->bs1_pin_->digital_write(false);
+  gpio_set_level(PIN_RST,    0);
+  gpio_set_level(PIN_DC,     0);
+  gpio_set_level(PIN_CS_M,   0);
+  gpio_set_level(PIN_CS_S,   0);
+  gpio_set_level(PIN_BUSY,   0);
+  gpio_set_level(PIN_PWR_EN, 0);
+  gpio_set_level(PIN_BS0,    0);
+  gpio_set_level(PIN_BS1,    0);
 }
 
 void Inkplate13::reset_panel_() {
-  this->rst_pin_->digital_write(false);
+  gpio_set_level(PIN_RST, 0);
   delay(100);
-  this->rst_pin_->digital_write(true);
+  gpio_set_level(PIN_RST, 1);
   delay(100);
 }
 
 void Inkplate13::wait_for_busy_() {
   uint32_t start = millis();
-  while (!this->busy_pin_->digital_read()) {
+  while (!gpio_get_level(PIN_BUSY)) {
     if (millis() - start > 45000) {
       ESP_LOGE(TAG, "wait_for_busy_ timeout");
       return;

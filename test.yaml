@@ -58,14 +58,6 @@ display:
   platform: inkplate13
   id: my_inkplate13
   spi_id: spi_display
-  cs_m_pin: GPIO42
-  cs_s_pin: GPIO39
-  rst_pin: GPIO4
-  dc_pin: GPIO14
-  busy_pin: GPIO7
-  pwr_en_pin: GPIO21
-  bs0_pin: GPIO6
-  bs1_pin: GPIO5
   rotation: 270
   update_interval: 60s
   lambda: |-
