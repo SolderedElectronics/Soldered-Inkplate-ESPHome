@@ -1,7 +1,6 @@
 #pragma once
 
 #include "esphome/core/component.h"
-#include "esphome/core/gpio.h"
 #include "esphome/core/helpers.h"
 #include "esphome/components/spi/spi.h"
 #include "esphome/components/display/display_buffer.h"
@@ -27,15 +26,6 @@ class Inkplate13 : public display::DisplayBuffer,
   display::DisplayType get_display_type() override {
     return display::DisplayType::DISPLAY_TYPE_COLOR;
   }
-
-  void set_rst_pin(GPIOPin *pin) { rst_pin_ = pin; }
-  void set_dc_pin(GPIOPin *pin) { dc_pin_ = pin; }
-  void set_busy_pin(GPIOPin *pin) { busy_pin_ = pin; }
-  void set_pwr_en_pin(GPIOPin *pin) { pwr_en_pin_ = pin; }
-  void set_cs_m_pin(GPIOPin *pin) { cs_m_pin_ = pin; }
-  void set_cs_s_pin(GPIOPin *pin) { cs_s_pin_ = pin; }
-  void set_bs0_pin(GPIOPin *pin) { bs0_pin_ = pin; }
-  void set_bs1_pin(GPIOPin *pin) { bs1_pin_ = pin; }
 
  protected:
   void draw_absolute_pixel_internal(int x, int y, Color color) override;
@@ -63,15 +53,6 @@ class Inkplate13 : public display::DisplayBuffer,
 
   uint8_t *buffer_{nullptr};
   bool panel_state_{false};
-
-  GPIOPin *rst_pin_{nullptr};
-  GPIOPin *dc_pin_{nullptr};
-  GPIOPin *busy_pin_{nullptr};
-  GPIOPin *pwr_en_pin_{nullptr};
-  GPIOPin *cs_m_pin_{nullptr};
-  GPIOPin *cs_s_pin_{nullptr};
-  GPIOPin *bs0_pin_{nullptr};
-  GPIOPin *bs1_pin_{nullptr};
 };
 
 }  // namespace esphome::inkplate13
