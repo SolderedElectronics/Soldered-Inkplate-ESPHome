@@ -10,7 +10,7 @@ static const char *TAG = "inkplate_spi";
 // Setup / loop / update
 // ---------------------------------------------------------------------------
 
-void InkplateSPIBase::setup() {
+void InkplateBase::setup() {
   this->spi_setup();
 
   size_t buf_size = (size_t) width_ * height_ / 2;
@@ -25,11 +25,11 @@ void InkplateSPIBase::setup() {
   this->disable_loop();  // loop() off until first update
 }
 
-void InkplateSPIBase::loop() {
+void InkplateBase::loop() {
   this->process_state_();
 }
 
-void InkplateSPIBase::update() {
+void InkplateBase::update() {
   if (state_ != STATE_IDLE) {
     ESP_LOGW(TAG, "update() skipped — display busy (state %d)", (int) state_);
     return;
@@ -45,7 +45,7 @@ void InkplateSPIBase::update() {
   set_state_(STATE_POWER_ON);
 }
 
-void InkplateSPIBase::dump_config() {
+void InkplateBase::dump_config() {
   ESP_LOGCONFIG(TAG, "Inkplate SPI %dx%d", width_, height_);
 }
 
@@ -53,7 +53,7 @@ void InkplateSPIBase::dump_config() {
 // Shutdown
 // ---------------------------------------------------------------------------
 
-void InkplateSPIBase::on_safe_shutdown() {
+void InkplateBase::on_safe_shutdown() {
   if (state_ == STATE_IDLE) return;  // panel already in deep sleep — nothing to do
   ESP_LOGW(TAG, "on_safe_shutdown() mid-refresh — emergency power off");
   state_ = STATE_IDLE;
@@ -65,7 +65,7 @@ void InkplateSPIBase::on_safe_shutdown() {
 // Pixel drawing
 // ---------------------------------------------------------------------------
 
-void InkplateSPIBase::draw_absolute_pixel_internal(int x, int y, Color color) {
+void InkplateBase::draw_absolute_pixel_internal(int x, int y, Color color) {
   if (x < 0 || y < 0 || x >= width_ || y >= height_)
     return;
   uint32_t pos = (uint32_t)(x / 2) + (uint32_t) y * (width_ / 2);
@@ -80,7 +80,7 @@ void InkplateSPIBase::draw_absolute_pixel_internal(int x, int y, Color color) {
 // Default init sequence replay
 // ---------------------------------------------------------------------------
 
-void InkplateSPIBase::do_init_() {
+void InkplateBase::do_init_() {
   // Wire format: [chip, cmd, n_data, data_0 ... data_(n-1)]
   size_t i = 0;
   while (i < init_seq_.size()) {
@@ -96,14 +96,14 @@ void InkplateSPIBase::do_init_() {
 // State machine
 // ---------------------------------------------------------------------------
 
-void InkplateSPIBase::set_state_(State s) {
+void InkplateBase::set_state_(State s) {
   ESP_LOGD(TAG, "state %d → %d", (int) state_, (int) s);
   state_          = s;
   state_start_ms_ = millis();
   if (s == STATE_IDLE) this->disable_loop();
 }
 
-void InkplateSPIBase::process_state_() {
+void InkplateBase::process_state_() {
   switch (state_) {
 
     case STATE_IDLE:
@@ -162,7 +162,7 @@ void InkplateSPIBase::process_state_() {
 // Partial update entry point (callable from subclass public API)
 // ---------------------------------------------------------------------------
 
-void InkplateSPIBase::start_partial_update_(int x, int y, int w, int h) {
+void InkplateBase::start_partial_update_(int x, int y, int w, int h) {
   if (state_ != STATE_IDLE) {
     ESP_LOGW(TAG, "start_partial_update_() skipped — busy (state %d)", (int) state_);
     return;

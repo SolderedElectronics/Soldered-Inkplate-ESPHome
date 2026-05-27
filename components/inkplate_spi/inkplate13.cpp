@@ -36,7 +36,7 @@ void Inkplate13::dump_config() {
 }
 
 // ---------------------------------------------------------------------------
-// InkplateSPIBase interface
+// InkplateBase interface
 // ---------------------------------------------------------------------------
 
 uint8_t Inkplate13::map_color_to_index_(Color color) {

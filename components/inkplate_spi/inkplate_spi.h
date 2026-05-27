@@ -10,13 +10,13 @@
 
 namespace esphome::inkplate_spi {
 
-class InkplateSPIBase : public display::DisplayBuffer,
+class InkplateBase : public display::DisplayBuffer,
                         public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST,
                                               spi::CLOCK_POLARITY_LOW,
                                               spi::CLOCK_PHASE_LEADING,
                                               spi::DATA_RATE_10MHZ> {
  public:
-  InkplateSPIBase(int width, int height) : width_(width), height_(height) {}
+  InkplateBase(int width, int height) : width_(width), height_(height) {}
 
   void setup()       override;
   void loop()        override;

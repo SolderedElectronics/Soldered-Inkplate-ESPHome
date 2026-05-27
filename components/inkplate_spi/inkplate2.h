@@ -1,45 +1,33 @@
 #pragma once
 
-#include "esphome/core/component.h"
-#include "esphome/core/helpers.h"
-#include "esphome/components/spi/spi.h"
-#include "esphome/components/display/display_buffer.h"
-
-#include <cinttypes>
-#include <vector>
+#include "inkplate_spi.h"
 
 namespace esphome::inkplate_spi {
 
-class Inkplate2 : public display::DisplayBuffer,
-                  public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST,
-                                        spi::CLOCK_POLARITY_LOW,
-                                        spi::CLOCK_PHASE_LEADING,
-                                        spi::DATA_RATE_10MHZ> {
+class Inkplate2 : public InkplateBase {
  public:
-  Inkplate2(int width, int height) : width_(width), height_(height) {}
+  Inkplate2(int width, int height) : InkplateBase(width, height) {}
 
-  void setup() override;
-  void loop() override;
   void dump_config() override;
-  void update() override;
 
-  void set_init_sequence(std::vector<uint8_t> seq) { init_seq_ = std::move(seq); }
-
-  display::DisplayType get_display_type() override {
-    return display::DisplayType::DISPLAY_TYPE_COLOR;
-  }
+  void set_pin_cs(int p) { pin_cs_ = p; }
 
  protected:
-  void draw_absolute_pixel_internal(int x, int y, Color color) override;
+  uint8_t map_color_to_index_(Color color) override;
+  void    send_command_to_chip_(uint8_t cmd, const uint8_t *data, size_t len, uint8_t chip) override;
+  void    prepare_for_update_() override;
 
-  int get_width_internal() override { return width_; }
-  int get_height_internal() override { return height_; }
+  bool do_power_on_step_()  override;
+  void do_send_pon_()       override;
+  bool do_transfer_step_()  override;
+  void do_send_refresh_()   override;
+  bool do_power_off_step_() override;
+  bool is_busy_()           override;
+  void do_deep_sleep_()     override;
+  void do_emergency_off_()  override;
 
  private:
-  int width_{0};
-  int height_{0};
-  uint8_t *buffer_{nullptr};
-  std::vector<uint8_t> init_seq_;
+  int pin_cs_{0};
 };
 
 }  // namespace esphome::inkplate_spi

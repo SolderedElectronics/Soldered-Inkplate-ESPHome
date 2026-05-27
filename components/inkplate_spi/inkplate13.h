@@ -4,9 +4,9 @@
 
 namespace esphome::inkplate_spi {
 
-class Inkplate13 : public InkplateSPIBase {
+class Inkplate13 : public InkplateBase {
  public:
-  Inkplate13(int width, int height) : InkplateSPIBase(width, height) {}
+  Inkplate13(int width, int height) : InkplateBase(width, height) {}
 
   void dump_config() override;
 
@@ -23,7 +23,7 @@ class Inkplate13 : public InkplateSPIBase {
   }
 
  protected:
-  // --- InkplateSPIBase interface ---
+  // --- InkplateBase interface ---
   uint8_t map_color_to_index_(Color color) override;
   void    send_command_to_chip_(uint8_t cmd, const uint8_t *data, size_t len, uint8_t chip) override;
   void    prepare_for_update_() override;
