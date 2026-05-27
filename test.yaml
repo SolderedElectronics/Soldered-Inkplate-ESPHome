@@ -9,9 +9,8 @@ esp32:
 
 external_components:
   - source:
-      type: git
-      url: https://github.com/SolderedElectronics/Soldered-Inkplate13-ESPHome
-      ref: dev
+      type: local
+      path: components
 
 psram:
   mode: octal
@@ -55,7 +54,8 @@ image:
     resize: 300x300
 
 display:
-  platform: inkplate13
+  platform: inkplate_spi
+  model: inkplate13
   id: my_inkplate13
   spi_id: spi_display
   rotation: 270
@@ -182,7 +182,7 @@ display:
     it.print(PX + 8, PY + 4, id(font_small), C_BLACK, count_buf);
 
     // Pattern: full on count 1, 7, 13 … (every 6th); 5 partials in between
-    auto &panel = static_cast<esphome::inkplate13::Inkplate13 &>(it);
+    auto &panel = static_cast<esphome::inkplate_spi::Inkplate13 &>(it);
     if (update_count % 6 == 1) {
       panel.display();
     } else {

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace esphome::inkplate13 {
+namespace esphome::inkplate_spi {
 
 static constexpr uint8_t REG_PSR             = 0x00;
 static constexpr uint8_t REG_PWR             = 0x01;

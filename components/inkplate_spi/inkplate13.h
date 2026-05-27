@@ -7,7 +7,7 @@
 
 #include <cinttypes>
 
-namespace esphome::inkplate13 {
+namespace esphome::inkplate_spi {
 
 class Inkplate13 : public display::DisplayBuffer,
                    public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST,
@@ -55,4 +55,4 @@ class Inkplate13 : public display::DisplayBuffer,
   bool panel_state_{false};
 };
 
-}  // namespace esphome::inkplate13
+}  // namespace esphome::inkplate_spi

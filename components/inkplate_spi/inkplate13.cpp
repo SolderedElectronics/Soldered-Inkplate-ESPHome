@@ -1,13 +1,13 @@
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include "inkplate13.h"
-#include "registers.h"
+#include "inkplate13_registers.h"
 
 #include "driver/gpio.h"
 
-namespace esphome::inkplate13 {
+namespace esphome::inkplate_spi {
 
-static const char *TAG = "inkplate13";
+static const char *TAG = "inkplate_spi";
 
 // Inkplate 13 Spectra fixed pin mapping
 static constexpr gpio_num_t PIN_RST    = GPIO_NUM_4;
@@ -402,4 +402,4 @@ void Inkplate13::wait_for_busy_() {
   }
 }
 
-}  // namespace esphome::inkplate13
+}  // namespace esphome::inkplate_spi
