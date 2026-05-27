@@ -9,6 +9,17 @@ InkplateModel(
     cpp_class="Inkplate13",
     width=1200,
     height=1600,
+    min_update_interval_ms=30000,  # ACeP panel — 30 s minimum between refreshes
+    pins={
+        "rst":    4,
+        "dc":     14,
+        "busy":   7,
+        "pwr_en": 21,
+        "cs_m":   42,
+        "cs_s":   39,
+        "bs0":    6,
+        "bs1":    5,
+    },
     init_sequence=[
         # (chip_target, cmd, data...)
         (CHIP_MASTER, 0x74, 0xC0, 0x1C, 0x1C, 0xCC, 0xCC, 0xCC, 0x15, 0x15, 0x55),  # AN_TM
