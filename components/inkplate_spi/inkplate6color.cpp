@@ -1,6 +1,5 @@
 #include "esphome/core/log.h"
 #include "inkplate6color.h"
-#include "inkplate6color_registers.h"
 
 namespace esphome::inkplate_spi {
 

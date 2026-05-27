@@ -1,13 +1,24 @@
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include "inkplate13.h"
-#include "inkplate13_registers.h"
 
 #include "driver/gpio.h"
 
 namespace esphome::inkplate_spi {
 
 static const char *TAG = "inkplate_spi";
+
+// Runtime register addresses (used outside init sequence)
+static constexpr uint8_t REG_DTM   = 0x10;
+static constexpr uint8_t REG_DRF   = 0x12;
+static constexpr uint8_t REG_PON   = 0x04;
+static constexpr uint8_t REG_POF   = 0x02;
+static constexpr uint8_t REG_PTLW  = 0x83;
+static constexpr uint8_t REG_CMD66 = 0xF0;
+
+static constexpr uint8_t REG_DRF_V[]   = {0x00};
+static constexpr uint8_t REG_POF_V[]   = {0x00};
+static constexpr uint8_t REG_CMD66_V[] = {0x49, 0x55, 0x13, 0x5D, 0x05, 0x10};
 
 // Inkplate 13 Spectra fixed pin mapping
 static constexpr gpio_num_t PIN_RST    = GPIO_NUM_4;
@@ -324,23 +335,16 @@ bool Inkplate13::set_panel_deep_sleep_(bool state) {
 }
 
 void Inkplate13::screen_init_() {
-  send_command_(REG_AN_TM,           REG_AN_TM_V,           sizeof(REG_AN_TM_V),           CHIP_MASTER);
-  send_command_(REG_CMD66,           REG_CMD66_V,           sizeof(REG_CMD66_V),           CHIP_BOTH);
-  send_command_(REG_PSR,             REG_PSR_V,             sizeof(REG_PSR_V),             CHIP_BOTH);
-  send_command_(REG_PLL,             REG_PLL_V,             sizeof(REG_PLL_V),             CHIP_BOTH);
-  send_command_(REG_CDI,             REG_CDI_V,             sizeof(REG_CDI_V),             CHIP_BOTH);
-  send_command_(REG_TCON,            REG_TCON_V,            sizeof(REG_TCON_V),            CHIP_BOTH);
-  send_command_(REG_AGID,            REG_AGID_V,            sizeof(REG_AGID_V),            CHIP_BOTH);
-  send_command_(REG_PWS,             REG_PWS_V,             sizeof(REG_PWS_V),             CHIP_BOTH);
-  send_command_(REG_CCSET,           REG_CCSET_V,           sizeof(REG_CCSET_V),           CHIP_BOTH);
-  send_command_(REG_TRES,            REG_TRES_V,            sizeof(REG_TRES_V),            CHIP_BOTH);
-  send_command_(REG_PWR,             REG_PWR_V,             sizeof(REG_PWR_V),             CHIP_MASTER);
-  send_command_(REG_EN_BUF,          REG_EN_BUF_V,          sizeof(REG_EN_BUF_V),          CHIP_MASTER);
-  send_command_(REG_BTST_P,          REG_BTST_P_V,          sizeof(REG_BTST_P_V),          CHIP_MASTER);
-  send_command_(REG_BOOST_VDDP_EN,   REG_BOOST_VDDP_EN_V,   sizeof(REG_BOOST_VDDP_EN_V),   CHIP_MASTER);
-  send_command_(REG_BTST_N,          REG_BTST_N_V,          sizeof(REG_BTST_N_V),          CHIP_MASTER);
-  send_command_(REG_BUCK_BOOST_VDDN, REG_BUCK_BOOST_VDDN_V, sizeof(REG_BUCK_BOOST_VDDN_V), CHIP_MASTER);
-  send_command_(REG_TFT_VCOM_POWER,  REG_TFT_VCOM_POWER_V,  sizeof(REG_TFT_VCOM_POWER_V),  CHIP_MASTER);
+  // Replay init sequence stored by set_init_sequence().
+  // Wire format per entry: [chip, cmd, n_data, data_0 ... data_(n-1)]
+  size_t i = 0;
+  while (i < init_seq_.size()) {
+    uint8_t chip = init_seq_[i++];
+    uint8_t cmd  = init_seq_[i++];
+    uint8_t n    = init_seq_[i++];
+    send_command_(cmd, init_seq_.data() + i, n, static_cast<ChipId>(chip));
+    i += n;
+  }
 }
 
 void Inkplate13::set_io_() {

@@ -6,6 +6,7 @@
 #include "esphome/components/display/display_buffer.h"
 
 #include <cinttypes>
+#include <vector>
 
 namespace esphome::inkplate_spi {
 
@@ -20,6 +21,10 @@ class Inkplate13 : public display::DisplayBuffer,
   void dump_config() override;
   void update() override;
 
+  Inkplate13(int width, int height) : width_(width), height_(height) {}
+
+  void set_init_sequence(std::vector<uint8_t> seq) { init_seq_ = std::move(seq); }
+
   void display(bool leave_on = true);
   void display_partial(int x, int y, int w, int h, bool leave_on = false);
 
@@ -30,8 +35,8 @@ class Inkplate13 : public display::DisplayBuffer,
  protected:
   void draw_absolute_pixel_internal(int x, int y, Color color) override;
 
-  int get_width_internal() override { return 1200; }
-  int get_height_internal() override { return 1600; }
+  int get_width_internal() override { return width_; }
+  int get_height_internal() override { return height_; }
 
  private:
   enum ChipId {
@@ -51,8 +56,11 @@ class Inkplate13 : public display::DisplayBuffer,
   void send_command_(uint8_t cmd, const uint8_t *data, size_t len, ChipId chip);
   static uint8_t map_color_to_palette_(Color color);
 
+  int width_{0};
+  int height_{0};
   uint8_t *buffer_{nullptr};
   bool panel_state_{false};
+  std::vector<uint8_t> init_seq_;
 };
 
 }  // namespace esphome::inkplate_spi
