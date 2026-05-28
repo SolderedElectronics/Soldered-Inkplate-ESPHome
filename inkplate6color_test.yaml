@@ -1,0 +1,127 @@
+esphome:
+  name: inkplate6color-test
+  friendly_name: Inkplate 6 Color Test
+  on_boot:
+    priority: -100  # run after all components initialised
+    then:
+      - component.update: my_inkplate6color
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+spi:
+  id: spi_display
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 44
+  - file: "gfonts://Roboto"
+    id: font_body
+    size: 22
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 16
+
+display:
+  platform: inkplate_spi
+  model: inkplate6color
+  id: my_inkplate6color
+  spi_id: spi_display
+  rotation: 180°
+  update_interval: never
+  lambda: |-
+    const int W = it.get_width();
+    const int H = it.get_height();
+
+    const Color C_BLACK  = Color(0,   0,   0  );
+    const Color C_WHITE  = Color(255, 255, 255);
+    const Color C_RED    = Color(255, 0,   0  );
+    const Color C_GREEN  = Color(0,   200, 0  );
+    const Color C_BLUE   = Color(0,   0,   255);
+    const Color C_ORANGE = Color(255, 128, 0  );
+
+    it.fill(C_WHITE);
+
+    it.filled_rectangle(0, 0, W, 60, C_BLACK);
+    it.print(14, 8,      id(font_title), C_WHITE,  "Daily Steps");
+    it.print(W - 14, 10, id(font_body),  C_GREEN,  display::TextAlign::RIGHT, "avg: 10,730");
+    it.print(W - 14, 38, id(font_small), C_WHITE,  display::TextAlign::RIGHT, "12/20 days above goal  •  Feb 2025");
+
+    const int N    = 20;
+    const int GOAL = 10000;
+    const int steps[] = {
+       8500, 12300,  6700, 10100, 14200,
+       9800, 11500,  7200, 13400, 10500,
+       8900, 12100, 11800,  9300, 15200,
+      10800,  7600, 13900, 11200,  9600
+    };
+
+    const int PL    = 65;
+    const int PR    = 585;
+    const int PT    = 80;
+    const int PB    = 400;
+    const int PW    = PR - PL;   // 520
+    const int PH    = PB - PT;   // 320
+    const int MAX_Y = 15000;
+
+    // Y axis ticks + labels every 3k
+    for (int v = 0; v <= MAX_Y; v += 3000) {
+      int gy = PB - (v * PH / MAX_Y);
+      it.line(PL - 4, gy, PL, gy, C_BLACK);
+      char buf[6];
+      if (v == 0) snprintf(buf, sizeof(buf), "0");
+      else        snprintf(buf, sizeof(buf), "%dk", v / 1000);
+      it.print(PL - 6, gy - 8, id(font_small), C_BLACK, display::TextAlign::RIGHT, buf);
+    }
+
+    // Axes
+    it.line(PL, PT, PL, PB, C_BLACK);
+    it.line(PL, PB, PR, PB, C_BLACK);
+
+    // Goal line
+    int goal_y = PB - (GOAL * PH / MAX_Y);
+    it.line(PL, goal_y, PR, goal_y, C_ORANGE);
+    it.print(PL + 4, goal_y - 18, id(font_small), C_ORANGE, "goal: 10k");
+
+    // X axis day labels
+    const int   marks[]  = {  0,   4,   9,  14 };
+    const char *xlabels[] = { "1", "5", "10", "15" };
+    for (int i = 0; i < 4; i++) {
+      int lx = PL + marks[i] * PW / (N - 1);
+      it.print(lx, PB + 8, id(font_small), C_BLACK, display::TextAlign::CENTER, xlabels[i]);
+    }
+
+    // Data line + dots
+    int px = -1, py = -1;
+    for (int d = 0; d < N; d++) {
+      int x = PL + d * PW / (N - 1);
+      int y = PB - (steps[d] * PH / MAX_Y);
+      Color dc = (steps[d] >= GOAL) ? C_GREEN : C_RED;
+      if (px >= 0)
+        it.line(px, py, x, y, dc);
+      it.filled_circle(x, y, 5, dc);
+      px = x; py = y;
+    }
+
+    // Today = last dot, BLUE ring + label
+    int ty = PB - (steps[N - 1] * PH / MAX_Y);
+    it.circle(PR, ty, 8, C_BLUE);
+    it.print(PR, PB + 24, id(font_small), C_BLUE, display::TextAlign::CENTER, "today");
