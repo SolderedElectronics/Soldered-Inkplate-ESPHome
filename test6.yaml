@@ -1,0 +1,89 @@
+esphome:
+  name: inkplate6color-test
+  friendly_name: Inkplate 6 Color Test
+  on_boot:
+    priority: -100  # run after all components initialised
+    then:
+      - component.update: my_inkplate6color
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+spi:
+  id: spi_display
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 44
+  - file: "gfonts://Roboto"
+    id: font_body
+    size: 22
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 16
+
+display:
+  platform: inkplate_spi
+  model: inkplate6color
+  id: my_inkplate6color
+  spi_id: spi_display
+  update_interval: never
+  lambda: |-
+    const int W = it.get_width();   // 600
+    const int H = it.get_height();  // 448
+
+    const Color C_BLACK  = Color(0,   0,   0  );
+    const Color C_WHITE  = Color(255, 255, 255);
+    const Color C_RED    = Color(255, 0,   0  );
+    const Color C_GREEN  = Color(0,   200, 0  );
+    const Color C_BLUE   = Color(0,   0,   255);
+    const Color C_YELLOW = Color(255, 255, 0  );
+    const Color C_ORANGE = Color(255, 128, 0  );
+
+    it.fill(C_WHITE);
+
+    // Header bar
+    it.filled_rectangle(0, 0, W, 54, C_BLACK);
+    it.print(14, 6, id(font_title), C_WHITE, "Inkplate 6 Color");
+    it.print(340, 18, id(font_body), C_YELLOW, "7-color ACeP  |  600x448");
+
+    // Color swatches — all 7 colors side by side
+    const int SW = W / 7;
+    Color swatches[] = {C_BLACK, C_WHITE, C_GREEN, C_BLUE, C_RED, C_YELLOW, C_ORANGE};
+    const char *names[] = {"Black", "White", "Green", "Blue", "Red", "Yellow", "Orange"};
+    for (int i = 0; i < 7; i++) {
+      it.filled_rectangle(i * SW, 72, SW - 2, 220, swatches[i]);
+      it.rectangle(i * SW, 72, SW - 2, 220, C_BLACK);
+      it.print(i * SW + SW / 2, 300, id(font_small), C_BLACK,
+               display::TextAlign::CENTER, names[i]);
+    }
+
+    // Info strip
+    it.horizontal_line(0, 326, W, C_BLACK);
+    it.print(14, 336, id(font_body), C_BLACK, "Single-chip SPI  |  No partial update");
+    it.print(14, 364, id(font_small), C_BLACK, "RST=19  DC=33  CS=27  BUSY=32  CLK=18  DIN=23");
+    it.print(14, 388, id(font_small), C_BLACK, "Soldered Electronics — Inkplate6COLOR");
+
+    // Gradient-style test strip using available colors
+    const int GW = W / 5;
+    Color grad[] = {C_RED, C_YELLOW, C_GREEN, C_BLUE, C_BLACK};
+    for (int i = 0; i < 5; i++)
+      it.filled_rectangle(i * GW, 416, GW, 32, grad[i]);

@@ -2,7 +2,8 @@ class InkplateModel:
     models = {}
 
     def __init__(self, name, cpp_class, width, height,
-                 pins=None, init_sequence=None, min_update_interval_ms=0):
+                 pins=None, init_sequence=None, min_update_interval_ms=0,
+                 spi_data_rate=10_000_000):
         self.name = name
         self.cpp_class = cpp_class
         self.width = width
@@ -10,6 +11,7 @@ class InkplateModel:
         self.pins = pins or {}
         self.init_sequence = init_sequence or []
         self.min_update_interval_ms = min_update_interval_ms
+        self.spi_data_rate = spi_data_rate
         InkplateModel.models[name] = self
 
     def get_init_bytes(self):

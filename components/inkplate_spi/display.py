@@ -143,6 +143,7 @@ async def to_code(config):
     cg.add(var.set_init_sequence(init_seq_arr, len(init_bytes)))
 
     cg.add(var.set_full_update_every(config[CONF_FULL_UPDATE_EVERY]))
+    cg.add(var.set_data_rate(model.spi_data_rate))
 
     # Output pins
     for conf_key in [CONF_PIN_RST, CONF_PIN_DC, CONF_PIN_PWR_EN,
