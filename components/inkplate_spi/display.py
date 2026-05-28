@@ -19,6 +19,9 @@ from . import models
 
 DEPENDENCIES = ["spi"]
 
+# ID used to name the generated `static const uint8_t[]` init sequence array in C++.
+# ESPHome codegen requires a declared ID to emit a named static array via
+# cg.static_const_array(); the array itself is only emitted when init_bytes is non-empty.
 CONF_INIT_SEQUENCE_ID = "init_sequence_id"
 
 CONF_PIN_RST    = "pin_rst"
@@ -64,6 +67,9 @@ _PIN_CONF_MAP = {
 
 
 def _set_model_id_type(config):
+    # CONFIG_SCHEMA must declare the ID with a concrete C++ type up front, so it
+    # uses Inkplate13 as a placeholder. This validator replaces that placeholder
+    # with the correct class for the selected model before codegen runs.
     config[CONF_ID].type = _CPP_CLASSES[config[CONF_MODEL]]
     return config
 
@@ -110,7 +116,7 @@ FINAL_VALIDATE_SCHEMA = _final_validate
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(Inkplate13),
+            cv.GenerateID(): cv.declare_id(Inkplate13),  # placeholder — overwritten by _set_model_id_type
             cv.GenerateID(CONF_INIT_SEQUENCE_ID): cv.declare_id(cg.uint8),
             cv.Required(CONF_MODEL): cv.one_of(*MODELS, lower=True),
             cv.Optional(CONF_FULL_UPDATE_EVERY, default=1): cv.positive_int,

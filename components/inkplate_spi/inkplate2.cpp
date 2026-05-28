@@ -6,6 +6,7 @@ namespace esphome::inkplate_spi {
 
 static const char *TAG = "inkplate2";
 
+// Runtime register addresses
 static constexpr uint8_t REG_DTM1  = 0x10;  // data transfer — BW plane
 static constexpr uint8_t REG_DTM2  = 0x13;  // data transfer — RED plane
 static constexpr uint8_t REG_DSTOP = 0x11;  // data stop
@@ -148,6 +149,7 @@ bool Inkplate2::do_power_on_step_() {
 // ---------------------------------------------------------------------------
 
 bool Inkplate2::do_transfer_step_() {
+  // 8 rows × 13 bytes = 104 bytes per tick (~0.8ms at 1MHz)
   static constexpr size_t ROWS_PER_CHUNK = 8;
   const size_t rows      = (size_t) height_;
   const size_t buf_bpr   = (size_t) width_ / 2;  // 4bpp: 52 bytes/row
@@ -156,6 +158,8 @@ bool Inkplate2::do_transfer_step_() {
   switch (trf_sub_) {
 
     case TRF_SEND_BW:
+      // DTM1 command byte sent as its own CS transaction (DC low).
+      // Data transaction (DC high, CS low) then held open across ticks.
       pin_cs_->digital_write(false);
       pin_dc_->digital_write(false);
       this->enable();
@@ -197,6 +201,7 @@ bool Inkplate2::do_transfer_step_() {
     }
 
     case TRF_SEND_RED:
+      // Same CS pattern as TRF_SEND_BW: command in own transaction, data held open.
       pin_cs_->digital_write(false);
       pin_dc_->digital_write(false);
       this->enable();
@@ -306,10 +311,13 @@ bool Inkplate2::is_busy_() {
 }
 
 // ---------------------------------------------------------------------------
-// Deep sleep
+// Deep sleep / emergency off
 // ---------------------------------------------------------------------------
 
 void Inkplate2::do_deep_sleep_() {
+  // Controller enters software deep sleep via 0x07/0xA5 command.
+  // All pins released to INPUT after — RST not held low since the sleep
+  // command itself parks the controller (unlike Inkplate13 which needs RST low).
   const uint8_t v = 0xA5;
   send_command_to_chip_(REG_SLEEP, &v, 1, 1);
   delay(1);
@@ -321,6 +329,8 @@ void Inkplate2::do_deep_sleep_() {
 }
 
 void Inkplate2::do_emergency_off_() {
+  // Called by on_safe_shutdown() if mid-refresh (e.g., OTA during update).
+  // Best-effort: drive RST low immediately without waiting for busy.
   pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
   pin_rst_->digital_write(false);
   pin_cs_->pin_mode(gpio::FLAG_OUTPUT);

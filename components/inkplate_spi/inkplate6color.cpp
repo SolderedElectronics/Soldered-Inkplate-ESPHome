@@ -6,6 +6,7 @@ namespace esphome::inkplate_spi {
 
 static const char *TAG = "inkplate6color";
 
+// Runtime register addresses
 static constexpr uint8_t REG_DTM   = 0x10;
 static constexpr uint8_t REG_DRF   = 0x12;
 static constexpr uint8_t REG_PON   = 0x04;
@@ -92,6 +93,8 @@ bool Inkplate6Color::do_power_on_step_() {
       return false;
 
     case PON_PRE_WAIT:
+      // RST held low for 100ms before the reset pulse — discharges panel
+      // capacitors. From Arduino reference; skipping causes init failures.
       if (now - sub_start_ms_ < 100) return false;
       sub_start_ms_ = now;
       pon_sub_ = PON_RST_LOW_WAIT;
@@ -244,10 +247,12 @@ bool Inkplate6Color::is_busy_() {
 }
 
 // ---------------------------------------------------------------------------
-// Deep sleep
+// Deep sleep / emergency off
 // ---------------------------------------------------------------------------
 
 void Inkplate6Color::do_deep_sleep_() {
+  // 10ms before + 100ms after sleep command — from Arduino reference.
+  // RST held low keeps the controller in hardware deep sleep between cycles.
   const uint8_t v = 0xA5;
   delay(10);
   send_command_to_chip_(REG_SLEEP, &v, 1, 1);
@@ -261,6 +266,8 @@ void Inkplate6Color::do_deep_sleep_() {
 }
 
 void Inkplate6Color::do_emergency_off_() {
+  // Called by on_safe_shutdown() if mid-refresh (e.g., OTA during update).
+  // Best-effort: drive RST low immediately without waiting for busy.
   pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
   pin_rst_->digital_write(false);
   pin_cs_->pin_mode(gpio::FLAG_OUTPUT);
