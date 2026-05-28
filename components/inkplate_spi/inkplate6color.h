@@ -46,10 +46,10 @@ class Inkplate6Color : public InkplateBase {
     PON_DONE,
   };
 
-  // Transfer sub-states: resolution → DTM stream → PON cmd → BUSY wait
+  // Transfer sub-states: open DTM → stream data → PON cmd → BUSY wait
   // PON (0x04) is sent after pixel data on this controller (unlike Inkplate13).
   enum TransferSub {
-    TRF_SEND_RESOLUTION,
+    TRF_START_DTM,
     TRF_STREAM_DATA,
     TRF_SEND_PON,
     TRF_WAIT_PON_BUSY,
@@ -66,7 +66,7 @@ class Inkplate6Color : public InkplateBase {
   };
 
   PowerOnSub  pon_sub_{PON_SETUP};
-  TransferSub trf_sub_{TRF_SEND_RESOLUTION};
+  TransferSub trf_sub_{TRF_START_DTM};
   PowerOffSub poff_sub_{POFF_SEND};
   uint32_t    sub_start_ms_{0};
   size_t      trf_row_{0};

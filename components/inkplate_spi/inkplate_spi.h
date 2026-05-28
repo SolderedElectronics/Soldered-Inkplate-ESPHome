@@ -64,6 +64,10 @@ class InkplateBase : public display::DisplayBuffer,
   // Map a Color to a 4-bit palette index (panel-specific).
   virtual uint8_t map_color_to_index_(Color color) = 0;
 
+  // Palette index for white — used to initialise the framebuffer. Must match
+  // map_color_to_index_() for white. Default: 1 (correct for all current boards).
+  virtual uint8_t white_color_index_() const { return 1; }
+
   // Send a command + data to a specific chip target.
   // chip: bitmask, 1=master/primary, 2=slave/secondary, 3=both.
   // Single-chip boards can ignore the chip parameter.

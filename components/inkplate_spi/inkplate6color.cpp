@@ -66,7 +66,7 @@ void Inkplate6Color::send_command_to_chip_(uint8_t cmd, const uint8_t *data, siz
 
 void Inkplate6Color::prepare_for_update_() {
   pon_sub_      = PON_SETUP;
-  trf_sub_      = TRF_SEND_RESOLUTION;
+  trf_sub_      = TRF_START_DTM;
   poff_sub_     = POFF_SEND;
   sub_start_ms_ = 0;
   trf_row_      = 0;
@@ -147,10 +147,8 @@ bool Inkplate6Color::do_transfer_step_() {
 
   switch (trf_sub_) {
 
-    case TRF_SEND_RESOLUTION: {
-      const uint8_t res[] = {0x02, 0x58, 0x01, 0xC0};
-      send_command_to_chip_(0x61, res, 4, 1);
-
+    case TRF_START_DTM: {
+      // 0x61 (resolution) already sent in init_sequence — no need to repeat here.
       // Send DTM command byte as its own CS transaction (DC low)
       pin_cs_->digital_write(false);
       pin_dc_->digital_write(false);

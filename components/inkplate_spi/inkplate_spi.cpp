@@ -20,7 +20,8 @@ void InkplateBase::setup() {
     ESP_LOGE(TAG, "Buffer alloc failed (%zu bytes)", buf_size);
     return;
   }
-  memset(buffer_, 0x11, buf_size);  // 0x11 = white (both nibbles = 0x1 = WHITE)
+  uint8_t w = white_color_index_();
+  memset(buffer_, (uint8_t)((w << 4) | w), buf_size);  // fill both nibbles with white index
   ESP_LOGI(TAG, "setup() done — buffer %zu bytes", buf_size);
   this->disable_loop();  // loop() off until first update
 }
@@ -74,7 +75,7 @@ void InkplateBase::draw_absolute_pixel_internal(int x, int y, Color color) {
   // 4bpp packed: 2 pixels per byte.
   // High nibble (bits 7-4) holds the even-x pixel, low nibble (bits 3-0) the odd-x pixel.
   uint32_t pos = (uint32_t)(x / 2) + (uint32_t) y * (width_ / 2);
-  uint8_t  cv  = map_color_to_index_(color);
+  uint8_t  cv  = map_color_to_index_(color) & 0x0F;  // clamp to nibble — overflow silently corrupts adjacent pixel
   if (x % 2 == 0)
     buffer_[pos] = (buffer_[pos] & 0x0F) | (cv << 4);
   else

@@ -42,14 +42,10 @@ MODELS = models.InkplateModel.models
 
 inkplate_spi_ns = cg.esphome_ns.namespace("inkplate_spi")
 
-Inkplate13     = inkplate_spi_ns.class_("Inkplate13",     display.Display, spi.SPIDevice)
-Inkplate6Color = inkplate_spi_ns.class_("Inkplate6Color", display.Display, spi.SPIDevice)
-Inkplate2      = inkplate_spi_ns.class_("Inkplate2",      display.Display, spi.SPIDevice)
-
+# Auto-built from MODELS so adding a model file is the only step needed for a new board.
 _CPP_CLASSES = {
-    "inkplate13":     Inkplate13,
-    "inkplate6color": Inkplate6Color,
-    "inkplate2":      Inkplate2,
+    name: inkplate_spi_ns.class_(model.cpp_class, display.Display, spi.SPIDevice)
+    for name, model in MODELS.items()
 }
 
 # Maps model pin name → (config key, pin schema validator)
@@ -116,7 +112,7 @@ FINAL_VALIDATE_SCHEMA = _final_validate
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(Inkplate13),  # placeholder — overwritten by _set_model_id_type
+            cv.GenerateID(): cv.declare_id(next(iter(_CPP_CLASSES.values()))),  # placeholder — overwritten by _set_model_id_type
             cv.GenerateID(CONF_INIT_SEQUENCE_ID): cv.declare_id(cg.uint8),
             cv.Required(CONF_MODEL): cv.one_of(*MODELS, lower=True),
             cv.Optional(CONF_FULL_UPDATE_EVERY, default=1): cv.positive_int,
