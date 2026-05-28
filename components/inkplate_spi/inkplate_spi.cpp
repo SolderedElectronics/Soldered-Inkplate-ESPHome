@@ -26,6 +26,9 @@ void InkplateBase::setup() {
 }
 
 void InkplateBase::loop() {
+  // Each call does one small unit of work and returns immediately.
+  // This keeps the ESPHome main loop responsive — WiFi, sensors, OTA
+  // all continue running normally during multi-second panel refreshes.
   this->process_state_();
 }
 
@@ -68,6 +71,8 @@ void InkplateBase::on_safe_shutdown() {
 void InkplateBase::draw_absolute_pixel_internal(int x, int y, Color color) {
   if (x < 0 || y < 0 || x >= width_ || y >= height_)
     return;
+  // 4bpp packed: 2 pixels per byte.
+  // High nibble (bits 7-4) holds the even-x pixel, low nibble (bits 3-0) the odd-x pixel.
   uint32_t pos = (uint32_t)(x / 2) + (uint32_t) y * (width_ / 2);
   uint8_t  cv  = map_color_to_index_(color);
   if (x % 2 == 0)
@@ -167,6 +172,9 @@ void InkplateBase::start_partial_update_(int x, int y, int w, int h) {
     ESP_LOGW(TAG, "start_partial_update_() skipped — busy (state %d)", (int) state_);
     return;
   }
+  // Caller must draw updated pixels into buffer_ before calling this.
+  // Coordinates are in logical (rotation-aware) space, same as the drawing API.
+  // The subclass maps them to physical panel coords in prepare_for_update_().
   partial_x_ = x;
   partial_y_ = y;
   partial_w_ = w;

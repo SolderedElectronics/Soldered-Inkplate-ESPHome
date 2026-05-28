@@ -10,6 +10,18 @@
 
 namespace esphome::inkplate_spi {
 
+// InkplateBase — non-blocking SPI e-paper display driver base class.
+//
+// Owns a 4bpp packed framebuffer (2 pixels per byte, high nibble = even x).
+// Drives the full panel refresh cycle via a state machine in loop() so the
+// ESPHome main loop is never blocked during multi-second panel refreshes.
+//
+// Refresh sequence (same for full and partial updates):
+//   POWER_ON → INIT → PON → WAIT_PON → TRANSFER → REFRESH
+//   → WAIT_REFRESH → POWER_OFF → DEEP_SLEEP → IDLE
+//
+// Subclasses implement all hardware-specific virtual methods below.
+// loop() is disabled when IDLE and re-enabled at the start of each refresh cycle.
 class InkplateBase : public display::DisplayBuffer,
                         public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST,
                                               spi::CLOCK_POLARITY_LOW,
@@ -83,6 +95,7 @@ class InkplateBase : public display::DisplayBuffer,
   virtual bool do_power_off_step_() = 0;
 
   // Non-blocking BUSY pin read. Return true when panel is ready (not busy).
+  // The panel drives BUSY LOW while working and HIGH when ready.
   virtual bool is_busy_() = 0;
 
   // Enter panel deep sleep (called once after STATE_POWER_OFF completes).
@@ -116,6 +129,10 @@ class InkplateBase : public display::DisplayBuffer,
   size_t          init_seq_len_{0};
 
  private:
+  // Top-level state machine — driven by process_state_() on every loop() tick.
+  // Step states (POWER_ON, TRANSFER, POWER_OFF) call into subclass step functions
+  // that return false until done, then the machine advances to the next state.
+  // Wait states (WAIT_PON, WAIT_REFRESH) poll is_busy_() and yield each tick.
   enum State {
     STATE_IDLE,
     STATE_POWER_ON,

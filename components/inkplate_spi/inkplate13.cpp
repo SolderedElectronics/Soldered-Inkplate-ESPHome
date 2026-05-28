@@ -42,6 +42,8 @@ void Inkplate13::dump_config() {
 // ---------------------------------------------------------------------------
 
 uint8_t Inkplate13::map_color_to_index_(Color color) {
+  // ACeP palette: the panel controller uses fixed 4-bit indices for its 6 native colors.
+  // No blending or dithering — colors snap to the nearest match or fall back to BLACK.
   uint8_t r = color.red, g = color.green, b = color.blue;
   if (r > 200 && g > 200 && b > 200) return 0x01;  // WHITE
   if (r < 50  && g < 50  && b < 50 ) return 0x00;  // BLACK
@@ -85,7 +87,7 @@ void Inkplate13::compute_ptlw_params_() {
 
   int x = partial_x_, y = partial_y_, w = partial_w_, h = partial_h_;
 
-  // Clip to logical (rotation-aware) canvas
+  // Step 1: clip the requested region to the logical (rotation-aware) canvas.
   if (x < 0) { w += x; x = 0; }
   if (y < 0) { h += y; y = 0; }
   if (x + w > this->get_width())  w = this->get_width()  - x;
@@ -95,7 +97,8 @@ void Inkplate13::compute_ptlw_params_() {
   const int16_t W = (int16_t) width_;   // physical panel width  = 1200
   const int16_t H = (int16_t) height_;  // physical panel height = 1600
 
-  // Map logical (rotated) coords → physical col/row
+  // Step 2: map logical (rotated) coords → physical col/row.
+  // Physical origin is always panel top-left regardless of software rotation.
   int16_t colStart, colEnd, rowStart, rowEnd;
   switch ((int) this->rotation_) {
     case 90:
@@ -116,7 +119,9 @@ void Inkplate13::compute_ptlw_params_() {
       break;
   }
 
-  // PTLW hardware alignment constraints: cols → multiples of 4, rows → even
+  // Step 3: align to hardware constraints.
+  // Cols must start/end on multiples of 4 (panel internal memory granularity).
+  // Rows must be even (panel processes pairs of rows).
   colStart = (colStart / 4) * 4;
   colEnd   = (((colEnd + 4) / 4) * 4) - 1;
   if (colEnd   >= W) colEnd   = W - 1;
@@ -128,6 +133,9 @@ void Inkplate13::compute_ptlw_params_() {
   const int16_t HALF_W     = W / 2;      // 600 physical cols per chip
   const int16_t HALF_BYTES = HALF_W / 2; // 300 bytes per row per chip
 
+  // Step 4: split the physical window across the two chips.
+  // HRST/HRED are in units of half-columns (panel addressing granularity = 0.5 col).
+  // VRST/VRED are in units of half-rows.
   // Master chip handles physical cols 0 .. HALF_W-1
   if (colStart < HALF_W) {
     int16_t lcs = colStart;
@@ -246,7 +254,9 @@ bool Inkplate13::do_transfer_step_() {
   switch (trf_sub_) {
 
     case TRF_MASTER:
-      // Open CS + SPI on first chunk only
+      // CS is asserted and the DTM command is sent only on the first chunk.
+      // The SPI transaction stays open across multiple loop() ticks — CS goes high
+      // only once all rows are sent. trf_row_ tracks progress between ticks.
       if (trf_row_ == 0) {
         ESP_LOGD(TAG, "transfer: master start");
         pin_cs_m_->digital_write(false);
@@ -449,10 +459,10 @@ bool Inkplate13::do_power_off_step_() {
 // ---------------------------------------------------------------------------
 
 void Inkplate13::do_deep_sleep_() {
-  // Hold RST low — keeps both controllers in deep sleep.
-  // pwr_en is already 0 (released in POFF_RELEASE).
-  // On next power-on cycle, set_all_pins_low_() + set_io_pins_() will
-  // take over and drive RST through the normal reset sequence.
+  // Holding RST low keeps both controllers in hardware deep sleep (~uA draw).
+  // PWR_EN is already cut (released in POFF_RELEASE).
+  // On the next power-on cycle, set_all_pins_low_() + set_io_pins_() will
+  // take RST through the normal reset sequence before sending init commands.
   pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
   pin_rst_->digital_write(false);
   ESP_LOGD(TAG, "panel deep sleep");

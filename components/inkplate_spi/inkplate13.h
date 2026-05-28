@@ -4,6 +4,22 @@
 
 namespace esphome::inkplate_spi {
 
+// Inkplate13 — driver for the 13.3" Spectra 6-color ACeP panel.
+//
+// The panel contains two independent controllers sharing one SPI bus,
+// each responsible for half the physical width (600 columns, 1600 rows).
+//   Master: physical cols   0 – 599  (selected via CS_M)
+//   Slave:  physical cols 600 – 1199 (selected via CS_S)
+// Both chips share RST, DC, BUSY, PWR_EN, BS0, BS1.
+//
+// Full update: stream the left half of each buffer row to master,
+//              then the right half to slave.
+//
+// Partial update: compute a PTLW (Partial TeLe Window) for each chip from
+//                 the requested logical region. The panel protocol requires
+//                 both chips to complete a full CMD66→PTLW→DTM cycle every
+//                 partial refresh — chips outside the update region receive
+//                 a null PTLW (4×4 window at origin) to satisfy this.
 class Inkplate13 : public InkplateBase {
  public:
   Inkplate13(int width, int height) : InkplateBase(width, height) {}
@@ -86,14 +102,15 @@ class Inkplate13 : public InkplateBase {
   uint32_t    sub_start_ms_{0};
   size_t      trf_row_{0};  // current row in chunked transfer
 
-  // Per-chip PTLW parameters computed once per partial update cycle.
+  // Per-chip PTLW parameters computed once per partial update cycle in compute_ptlw_params_().
+  // Stored here so do_transfer_step_() can stream data without recomputing anything mid-transfer.
   struct PartialChipParams {
-    bool    needed{false};
-    uint8_t ptlw[9]{};     // 9-byte PTLW payload
-    int     mem_col_off{0}; // byte offset from row start in buffer_
-    int     bytes_per_row{0};
-    int     row_start{0};
-    int     row_end{0};
+    bool    needed{false};       // false → chip is outside the update region, send null PTLW
+    uint8_t ptlw[9]{};           // 9-byte PTLW payload: HRST(2), HRED(2), VRST(2), VRED(2), PT(1)
+    int     mem_col_off{0};      // byte offset from the start of a row in buffer_ for this chip's window
+    int     bytes_per_row{0};    // number of bytes to send per row for this chip's window
+    int     row_start{0};        // first physical row to send (inclusive)
+    int     row_end{0};          // last physical row to send (inclusive)
   };
 
   PartialChipParams ptlw_master_;
