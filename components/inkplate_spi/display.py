@@ -139,8 +139,9 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID], model.width, model.height)
 
     init_bytes = model.get_init_bytes()
-    init_seq_arr = cg.static_const_array(config[CONF_INIT_SEQUENCE_ID], init_bytes)
-    cg.add(var.set_init_sequence(init_seq_arr, len(init_bytes)))
+    if init_bytes:
+        init_seq_arr = cg.static_const_array(config[CONF_INIT_SEQUENCE_ID], init_bytes)
+        cg.add(var.set_init_sequence(init_seq_arr, len(init_bytes)))
 
     cg.add(var.set_full_update_every(config[CONF_FULL_UPDATE_EVERY]))
     cg.add(var.set_data_rate(model.spi_data_rate))

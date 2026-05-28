@@ -45,6 +45,7 @@ display:
   model: inkplate6color
   id: my_inkplate6color
   spi_id: spi_display
+  rotation: 180°
   update_interval: never
   lambda: |-
     const int W = it.get_width();   // 600

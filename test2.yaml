@@ -1,0 +1,74 @@
+esphome:
+  name: inkplate2-test
+  friendly_name: Inkplate 2 Test
+  on_boot:
+    priority: -100  # run after all components initialised
+    then:
+      - component.update: my_inkplate2
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+spi:
+  id: spi_display
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 16
+  - file: "gfonts://Roboto"
+    id: font_body
+    size: 12
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 10
+
+display:
+  platform: inkplate_spi
+  model: inkplate2
+  id: my_inkplate2
+  spi_id: spi_display
+  rotation: 270°
+  update_interval: never
+  lambda: |-
+    const int W = it.get_width();   // 212 (after 270° rotation)
+    const int H = it.get_height();  // 104 (after 270° rotation)
+
+    const Color C_BLACK = Color(0,   0,   0  );
+    const Color C_WHITE = Color(255, 255, 255);
+    const Color C_RED   = Color(255, 0,   0  );
+
+    it.fill(C_WHITE);
+
+    // Header bar — black with red left accent stripe
+    it.filled_rectangle(0, 0, W, 20, C_BLACK);
+    it.filled_rectangle(0, 0, 4, 20, C_RED);
+    it.print(10, 2, id(font_title), C_WHITE, "Inkplate 2");
+
+    // Color swatches side by side — RED left, BLACK right
+    it.filled_rectangle(8,   23, 90, 38, C_RED);
+    it.filled_rectangle(114, 23, 90, 38, C_BLACK);
+    it.print(53,  65, id(font_small), C_BLACK, display::TextAlign::CENTER, "RED");
+    it.print(159, 65, id(font_small), C_BLACK, display::TextAlign::CENTER, "BLACK");
+
+    // Pin info footer
+    it.horizontal_line(0, 78, W, C_BLACK);
+    it.print(6, 81, id(font_small), C_BLACK, "RST=19  DC=33  CS=27  BUSY=32");
+    it.print(6, 93, id(font_small), C_BLACK, "CLK=18  DIN=23  |  Soldered Electronics");
