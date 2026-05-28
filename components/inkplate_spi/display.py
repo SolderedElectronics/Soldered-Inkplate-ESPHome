@@ -4,14 +4,32 @@ import importlib
 import esphome.config_validation as cv
 from esphome.config_validation import update_interval
 import esphome.codegen as cg
+from esphome import pins as esphome_pins
 from esphome.components import spi, display
-from esphome.const import CONF_ID, CONF_LAMBDA, CONF_MODEL, CONF_PAGES, CONF_UPDATE_INTERVAL
+from esphome.const import (
+    CONF_FULL_UPDATE_EVERY,
+    CONF_ID,
+    CONF_LAMBDA,
+    CONF_MODEL,
+    CONF_PAGES,
+    CONF_UPDATE_INTERVAL,
+)
 
 from . import models
 
-DEPENDENCIES = ["spi", "display"]
+DEPENDENCIES = ["spi"]
 
-CONF_FULL_UPDATE_EVERY = "full_update_every"
+CONF_INIT_SEQUENCE_ID = "init_sequence_id"
+
+CONF_PIN_RST    = "pin_rst"
+CONF_PIN_DC     = "pin_dc"
+CONF_PIN_BUSY   = "pin_busy"
+CONF_PIN_PWR_EN = "pin_pwr_en"
+CONF_PIN_CS_M   = "pin_cs_m"
+CONF_PIN_CS_S   = "pin_cs_s"
+CONF_PIN_BS0    = "pin_bs0"
+CONF_PIN_BS1    = "pin_bs1"
+CONF_PIN_CS     = "pin_cs"
 
 # Auto-load every file in models/ so they self-register into InkplateModel.models
 for _mod in pkgutil.iter_modules(models.__path__):
@@ -31,9 +49,32 @@ _CPP_CLASSES = {
     "inkplate2":      Inkplate2,
 }
 
+# Maps model pin name → (config key, pin schema validator)
+_PIN_CONF_MAP = {
+    "rst":    (CONF_PIN_RST,    esphome_pins.gpio_output_pin_schema),
+    "dc":     (CONF_PIN_DC,     esphome_pins.gpio_output_pin_schema),
+    "busy":   (CONF_PIN_BUSY,   esphome_pins.gpio_input_pin_schema),
+    "pwr_en": (CONF_PIN_PWR_EN, esphome_pins.gpio_output_pin_schema),
+    "cs_m":   (CONF_PIN_CS_M,   esphome_pins.gpio_output_pin_schema),
+    "cs_s":   (CONF_PIN_CS_S,   esphome_pins.gpio_output_pin_schema),
+    "bs0":    (CONF_PIN_BS0,    esphome_pins.gpio_output_pin_schema),
+    "bs1":    (CONF_PIN_BS1,    esphome_pins.gpio_output_pin_schema),
+    "cs":     (CONF_PIN_CS,     esphome_pins.gpio_output_pin_schema),
+}
+
 
 def _set_model_id_type(config):
     config[CONF_ID].type = _CPP_CLASSES[config[CONF_MODEL]]
+    return config
+
+
+def _inject_model_pins(config):
+    """Fill in pin defaults from model for any pins not specified by the user."""
+    model = MODELS[config[CONF_MODEL]]
+    for name, num in model.pins.items():
+        conf_key, schema = _PIN_CONF_MAP[name]
+        if conf_key not in config:
+            config[conf_key] = schema({"number": num})
     return config
 
 
@@ -70,14 +111,26 @@ CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(Inkplate13),
+            cv.GenerateID(CONF_INIT_SEQUENCE_ID): cv.declare_id(cg.uint8),
             cv.Required(CONF_MODEL): cv.one_of(*MODELS, lower=True),
             cv.Optional(CONF_FULL_UPDATE_EVERY, default=1): cv.positive_int,
+            # Pin overrides — optional, defaults injected from model by _inject_model_pins
+            cv.Optional(CONF_PIN_RST):    esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_DC):     esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_BUSY):   esphome_pins.gpio_input_pin_schema,
+            cv.Optional(CONF_PIN_PWR_EN): esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_CS_M):   esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_CS_S):   esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_BS0):    esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_BS1):    esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_CS):     esphome_pins.gpio_output_pin_schema,
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
     .extend(display.FULL_DISPLAY_SCHEMA)
     .extend(spi.spi_device_schema(cs_pin_required=False)),
     _set_model_id_type,
+    _inject_model_pins,
 )
 
 
@@ -86,31 +139,23 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID], model.width, model.height)
 
     init_bytes = model.get_init_bytes()
-    bytes_str = ", ".join(f"0x{b:02X}" for b in init_bytes)
-    cg.add(var.set_init_sequence(
-        cg.RawExpression(f"std::vector<uint8_t>{{{bytes_str}}}")
-    ))
+    init_seq_arr = cg.static_const_array(config[CONF_INIT_SEQUENCE_ID], init_bytes)
+    cg.add(var.set_init_sequence(init_seq_arr, len(init_bytes)))
 
     cg.add(var.set_full_update_every(config[CONF_FULL_UPDATE_EVERY]))
 
-    # Common pins (all boards)
-    pins = model.pins
-    cg.add(var.set_pin_rst(pins["rst"]))
-    cg.add(var.set_pin_dc(pins["dc"]))
-    cg.add(var.set_pin_busy(pins["busy"]))
-    cg.add(var.set_pin_pwr_en(pins["pwr_en"]))
+    # Output pins
+    for conf_key in [CONF_PIN_RST, CONF_PIN_DC, CONF_PIN_PWR_EN,
+                     CONF_PIN_CS_M, CONF_PIN_CS_S, CONF_PIN_BS0, CONF_PIN_BS1, CONF_PIN_CS]:
+        if conf_key not in config:
+            continue
+        pin = await cg.gpio_pin_expression(config[conf_key])
+        cg.add(getattr(var, f"set_{conf_key}")(pin))
 
-    # Board-specific pins (present only if in model's pins dict)
-    if "cs_m" in pins:
-        cg.add(var.set_pin_cs_m(pins["cs_m"]))
-    if "cs_s" in pins:
-        cg.add(var.set_pin_cs_s(pins["cs_s"]))
-    if "bs0" in pins:
-        cg.add(var.set_pin_bs0(pins["bs0"]))
-    if "bs1" in pins:
-        cg.add(var.set_pin_bs1(pins["bs1"]))
-    if "cs" in pins:
-        cg.add(var.set_pin_cs(pins["cs"]))
+    # Input pin
+    if CONF_PIN_BUSY in config:
+        pin = await cg.gpio_pin_expression(config[CONF_PIN_BUSY])
+        cg.add(var.set_pin_busy(pin))
 
     await display.register_display(var, config)
     await spi.register_spi_device(var, config, write_only=True)

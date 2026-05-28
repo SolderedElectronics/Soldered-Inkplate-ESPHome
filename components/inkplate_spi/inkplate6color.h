@@ -10,7 +10,7 @@ class Inkplate6Color : public InkplateBase {
 
   void dump_config() override;
 
-  void set_pin_cs(int p) { pin_cs_ = p; }
+  void set_pin_cs(GPIOPin *p) { pin_cs_ = p; }
 
  protected:
   uint8_t map_color_to_index_(Color color) override;
@@ -27,7 +27,7 @@ class Inkplate6Color : public InkplateBase {
   void do_emergency_off_()  override;
 
  private:
-  int pin_cs_{0};
+  GPIOPin *pin_cs_{nullptr};
 };
 
 }  // namespace esphome::inkplate_spi

@@ -1,7 +1,6 @@
+#include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include "inkplate13.h"
-
-#include "driver/gpio.h"
 
 namespace esphome::inkplate_spi {
 
@@ -24,8 +23,11 @@ static constexpr uint8_t CHIP_MASTER = 1;
 static constexpr uint8_t CHIP_SLAVE  = 2;
 static constexpr uint8_t CHIP_BOTH   = 3;
 
-// Convenience cast helper
-#define PIN(x) static_cast<gpio_num_t>(x)
+// Null PTLW: 4-col × 4-row window at physical origin — sent to chips not
+// involved in a partial update so both chips complete the full CMD66→PTLW→DTM cycle.
+static constexpr uint8_t NULL_PTLW[9] = {
+  0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x01, 0x01
+};
 
 // ---------------------------------------------------------------------------
 
@@ -51,8 +53,8 @@ uint8_t Inkplate13::map_color_to_index_(Color color) {
 }
 
 void Inkplate13::send_command_to_chip_(uint8_t cmd, const uint8_t *data, size_t len, uint8_t chip) {
-  if (chip & CHIP_MASTER) gpio_set_level(PIN(pin_cs_m_), 0);
-  if (chip & CHIP_SLAVE)  gpio_set_level(PIN(pin_cs_s_), 0);
+  if (chip & CHIP_MASTER) pin_cs_m_->digital_write(false);
+  if (chip & CHIP_SLAVE)  pin_cs_s_->digital_write(false);
 
   this->enable();
   this->write_byte(cmd);
@@ -60,8 +62,8 @@ void Inkplate13::send_command_to_chip_(uint8_t cmd, const uint8_t *data, size_t 
     this->write_array(data, len);
   this->disable();
 
-  if (chip & CHIP_MASTER) gpio_set_level(PIN(pin_cs_m_), 1);
-  if (chip & CHIP_SLAVE)  gpio_set_level(PIN(pin_cs_s_), 1);
+  if (chip & CHIP_MASTER) pin_cs_m_->digital_write(true);
+  if (chip & CHIP_SLAVE)  pin_cs_s_->digital_write(true);
 }
 
 void Inkplate13::prepare_for_update_() {
@@ -178,7 +180,7 @@ void Inkplate13::compute_ptlw_params_() {
 // ---------------------------------------------------------------------------
 
 bool Inkplate13::do_power_on_step_() {
-  uint32_t now = millis();
+  uint32_t now = App.get_loop_component_start_time();
   switch (pon_sub_) {
 
     case PON_PINS_LOW:
@@ -190,21 +192,21 @@ bool Inkplate13::do_power_on_step_() {
     case PON_PINS_LOW_WAIT:
       if (now - sub_start_ms_ < 50) return false;
       set_io_pins_();
-      gpio_set_level(PIN(pin_pwr_en_), 1);
+      pin_pwr_en_->digital_write(true);
       sub_start_ms_ = now;
       pon_sub_ = PON_IO_WAIT;
       return false;
 
     case PON_IO_WAIT:
       if (now - sub_start_ms_ < 100) return false;
-      gpio_set_level(PIN(pin_rst_), 0);
+      pin_rst_->digital_write(false);
       sub_start_ms_ = now;
       pon_sub_ = PON_RESET_LOW_WAIT;
       return false;
 
     case PON_RESET_LOW_WAIT:
       if (now - sub_start_ms_ < 100) return false;
-      gpio_set_level(PIN(pin_rst_), 1);
+      pin_rst_->digital_write(true);
       sub_start_ms_ = now;
       pon_sub_ = PON_RESET_HIGH_WAIT;
       return false;
@@ -247,19 +249,19 @@ bool Inkplate13::do_transfer_step_() {
       // Open CS + SPI on first chunk only
       if (trf_row_ == 0) {
         ESP_LOGD(TAG, "transfer: master start");
-        gpio_set_level(PIN(pin_cs_m_), 0);
+        pin_cs_m_->digital_write(false);
         this->enable();
         this->write_byte(REG_DTM);
       }
       {
         size_t end = std::min(trf_row_ + ROWS_PER_CHUNK, rows);
         for (size_t i = trf_row_; i < end; i++)
-          this->write_array(buffer_ + i * bytes_per_row, half);
+          this->write_array(this->buffer_ + i * bytes_per_row, half);
         trf_row_ = end;
       }
       if (trf_row_ >= rows) {
         this->disable();
-        gpio_set_level(PIN(pin_cs_m_), 1);
+        pin_cs_m_->digital_write(true);
         trf_row_  = 0;
         trf_sub_  = TRF_WAIT_MASTER;
         ESP_LOGD(TAG, "transfer: master done");
@@ -274,19 +276,19 @@ bool Inkplate13::do_transfer_step_() {
     case TRF_SLAVE:
       if (trf_row_ == 0) {
         ESP_LOGD(TAG, "transfer: slave start");
-        gpio_set_level(PIN(pin_cs_s_), 0);
+        pin_cs_s_->digital_write(false);
         this->enable();
         this->write_byte(REG_DTM);
       }
       {
         size_t end = std::min(trf_row_ + ROWS_PER_CHUNK, rows);
         for (size_t i = trf_row_; i < end; i++)
-          this->write_array(buffer_ + i * bytes_per_row + half, half);
+          this->write_array(this->buffer_ + i * bytes_per_row + half, half);
         trf_row_ = end;
       }
       if (trf_row_ >= rows) {
         this->disable();
-        gpio_set_level(PIN(pin_cs_s_), 1);
+        pin_cs_s_->digital_write(true);
         trf_row_  = 0;
         trf_sub_  = TRF_WAIT_SLAVE;
         ESP_LOGD(TAG, "transfer: slave done");
@@ -310,22 +312,19 @@ bool Inkplate13::do_transfer_step_() {
     case TRF_PARTIAL_SETUP_M: {
       send_command_to_chip_(REG_CMD66, CMD66_V, sizeof(CMD66_V), CHIP_MASTER);
       if (!ptlw_master_.needed) {
-        static constexpr uint8_t NULL_PTLW[9] = {
-          0x00,0x00, 0x00,0x07, 0x00,0x00, 0x00,0x01, 0x01
-        };
         send_command_to_chip_(REG_PTLW, NULL_PTLW, 9, CHIP_MASTER);
-        gpio_set_level(PIN(pin_cs_m_), 0);
+        pin_cs_m_->digital_write(false);
         this->enable();
         this->write_byte(REG_DTM);
         for (int r = 0; r < 4; r++)
-          this->write_array(buffer_ + r * (size_t)(width_ / 2), 2);
+          this->write_array(this->buffer_ + r * (size_t)(width_ / 2), 2);
         this->disable();
-        gpio_set_level(PIN(pin_cs_m_), 1);
+        pin_cs_m_->digital_write(true);
         trf_sub_ = TRF_PARTIAL_WAIT_M;
       } else {
         ESP_LOGD(TAG, "partial: master CMD66+PTLW+DTM start");
         send_command_to_chip_(REG_PTLW, ptlw_master_.ptlw, 9, CHIP_MASTER);
-        gpio_set_level(PIN(pin_cs_m_), 0);
+        pin_cs_m_->digital_write(false);
         this->enable();
         this->write_byte(REG_DTM);
         trf_row_ = ptlw_master_.row_start;
@@ -338,12 +337,12 @@ bool Inkplate13::do_transfer_step_() {
       size_t end = std::min(trf_row_ + ROWS_PER_CHUNK,
                             (size_t)(ptlw_master_.row_end + 1));
       for (size_t i = trf_row_; i < end; i++)
-        this->write_array(buffer_ + i * (size_t)(width_ / 2) + ptlw_master_.mem_col_off,
+        this->write_array(this->buffer_ + i * (size_t)(width_ / 2) + ptlw_master_.mem_col_off,
                           ptlw_master_.bytes_per_row);
       trf_row_ = end;
       if (trf_row_ > (size_t) ptlw_master_.row_end) {
         this->disable();
-        gpio_set_level(PIN(pin_cs_m_), 1);
+        pin_cs_m_->digital_write(true);
         trf_sub_ = TRF_PARTIAL_WAIT_M;
         ESP_LOGD(TAG, "partial: master DTM done");
       }
@@ -358,22 +357,19 @@ bool Inkplate13::do_transfer_step_() {
     case TRF_PARTIAL_SETUP_S: {
       send_command_to_chip_(REG_CMD66, CMD66_V, sizeof(CMD66_V), CHIP_SLAVE);
       if (!ptlw_slave_.needed) {
-        static constexpr uint8_t NULL_PTLW[9] = {
-          0x00,0x00, 0x00,0x07, 0x00,0x00, 0x00,0x01, 0x01
-        };
         send_command_to_chip_(REG_PTLW, NULL_PTLW, 9, CHIP_SLAVE);
-        gpio_set_level(PIN(pin_cs_s_), 0);
+        pin_cs_s_->digital_write(false);
         this->enable();
         this->write_byte(REG_DTM);
         for (int r = 0; r < 4; r++)
-          this->write_array(buffer_ + r * (size_t)(width_ / 2) + (width_ / 4), 2);
+          this->write_array(this->buffer_ + r * (size_t)(width_ / 2) + (width_ / 4), 2);
         this->disable();
-        gpio_set_level(PIN(pin_cs_s_), 1);
+        pin_cs_s_->digital_write(true);
         trf_sub_ = TRF_PARTIAL_WAIT_S;
       } else {
         ESP_LOGD(TAG, "partial: slave CMD66+PTLW+DTM start");
         send_command_to_chip_(REG_PTLW, ptlw_slave_.ptlw, 9, CHIP_SLAVE);
-        gpio_set_level(PIN(pin_cs_s_), 0);
+        pin_cs_s_->digital_write(false);
         this->enable();
         this->write_byte(REG_DTM);
         trf_row_ = ptlw_slave_.row_start;
@@ -386,12 +382,12 @@ bool Inkplate13::do_transfer_step_() {
       size_t end = std::min(trf_row_ + ROWS_PER_CHUNK,
                             (size_t)(ptlw_slave_.row_end + 1));
       for (size_t i = trf_row_; i < end; i++)
-        this->write_array(buffer_ + i * (size_t)(width_ / 2) + ptlw_slave_.mem_col_off,
+        this->write_array(this->buffer_ + i * (size_t)(width_ / 2) + ptlw_slave_.mem_col_off,
                           ptlw_slave_.bytes_per_row);
       trf_row_ = end;
       if (trf_row_ > (size_t) ptlw_slave_.row_end) {
         this->disable();
-        gpio_set_level(PIN(pin_cs_s_), 1);
+        pin_cs_s_->digital_write(true);
         trf_sub_ = TRF_PARTIAL_WAIT_S;
         ESP_LOGD(TAG, "partial: slave DTM done");
       }
@@ -432,13 +428,13 @@ bool Inkplate13::do_power_off_step_() {
       return false;
 
     case POFF_RELEASE:
-      gpio_set_direction(PIN(pin_dc_),     GPIO_MODE_INPUT);
-      gpio_set_direction(PIN(pin_cs_m_),   GPIO_MODE_INPUT);
-      gpio_set_direction(PIN(pin_cs_s_),   GPIO_MODE_INPUT);
+      pin_dc_->pin_mode(gpio::FLAG_INPUT);
+      pin_cs_m_->pin_mode(gpio::FLAG_INPUT);
+      pin_cs_s_->pin_mode(gpio::FLAG_INPUT);
       // RST intentionally NOT released — do_deep_sleep_() will drive it low.
-      gpio_set_direction(PIN(pin_busy_),   GPIO_MODE_INPUT);
-      gpio_set_direction(PIN(pin_pwr_en_), GPIO_MODE_INPUT);
-      gpio_set_level(PIN(pin_pwr_en_), 0);
+      pin_busy_->pin_mode(gpio::FLAG_INPUT);
+      pin_pwr_en_->pin_mode(gpio::FLAG_INPUT);
+      pin_pwr_en_->digital_write(false);
       poff_sub_ = POFF_DONE;
       return true;
 
@@ -457,18 +453,18 @@ void Inkplate13::do_deep_sleep_() {
   // pwr_en is already 0 (released in POFF_RELEASE).
   // On next power-on cycle, set_all_pins_low_() + set_io_pins_() will
   // take over and drive RST through the normal reset sequence.
-  gpio_set_direction(PIN(pin_rst_), GPIO_MODE_OUTPUT);
-  gpio_set_level(PIN(pin_rst_), 0);
+  pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
+  pin_rst_->digital_write(false);
   ESP_LOGD(TAG, "panel deep sleep");
 }
 
 void Inkplate13::do_emergency_off_() {
   // Called by on_safe_shutdown() if mid-refresh (e.g., OTA during update).
   // Best-effort: kill power and RST immediately without waiting for busy.
-  gpio_set_direction(PIN(pin_pwr_en_), GPIO_MODE_OUTPUT);
-  gpio_set_level(PIN(pin_pwr_en_), 0);
-  gpio_set_direction(PIN(pin_rst_), GPIO_MODE_OUTPUT);
-  gpio_set_level(PIN(pin_rst_), 0);
+  pin_pwr_en_->pin_mode(gpio::FLAG_OUTPUT);
+  pin_pwr_en_->digital_write(false);
+  pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
+  pin_rst_->digital_write(false);
   ESP_LOGW(TAG, "emergency off");
 }
 
@@ -477,7 +473,7 @@ void Inkplate13::do_emergency_off_() {
 // ---------------------------------------------------------------------------
 
 bool Inkplate13::is_busy_() {
-  return gpio_get_level(PIN(pin_busy_)) != 0;
+  return pin_busy_->digital_read();
 }
 
 // ---------------------------------------------------------------------------
@@ -485,34 +481,32 @@ bool Inkplate13::is_busy_() {
 // ---------------------------------------------------------------------------
 
 void Inkplate13::set_io_pins_() {
-  gpio_set_direction(PIN(pin_rst_),    GPIO_MODE_OUTPUT);
-  gpio_set_direction(PIN(pin_dc_),     GPIO_MODE_OUTPUT);
-  gpio_set_direction(PIN(pin_cs_m_),   GPIO_MODE_OUTPUT);
-  gpio_set_direction(PIN(pin_cs_s_),   GPIO_MODE_OUTPUT);
-  gpio_set_direction(PIN(pin_busy_),   GPIO_MODE_INPUT);
-  gpio_set_pull_mode(PIN(pin_busy_),   GPIO_PULLUP_ONLY);
-  gpio_set_direction(PIN(pin_pwr_en_), GPIO_MODE_OUTPUT);
-  gpio_set_direction(PIN(pin_bs0_),    GPIO_MODE_OUTPUT);
-  gpio_set_direction(PIN(pin_bs1_),    GPIO_MODE_OUTPUT);
+  pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
+  pin_dc_->pin_mode(gpio::FLAG_OUTPUT);
+  pin_cs_m_->pin_mode(gpio::FLAG_OUTPUT);
+  pin_cs_s_->pin_mode(gpio::FLAG_OUTPUT);
+  pin_busy_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
+  pin_pwr_en_->pin_mode(gpio::FLAG_OUTPUT);
+  pin_bs0_->pin_mode(gpio::FLAG_OUTPUT);
+  pin_bs1_->pin_mode(gpio::FLAG_OUTPUT);
 
-  gpio_set_level(PIN(pin_dc_),     1);
-  gpio_set_level(PIN(pin_cs_m_),   1);
-  gpio_set_level(PIN(pin_cs_s_),   1);
-  gpio_set_level(PIN(pin_rst_),    0);
-  gpio_set_level(PIN(pin_pwr_en_), 0);
-  gpio_set_level(PIN(pin_bs0_),    0);
-  gpio_set_level(PIN(pin_bs1_),    1);
+  pin_dc_->digital_write(true);
+  pin_cs_m_->digital_write(true);
+  pin_cs_s_->digital_write(true);
+  pin_rst_->digital_write(false);
+  pin_pwr_en_->digital_write(false);
+  pin_bs0_->digital_write(false);
+  pin_bs1_->digital_write(true);
 }
 
 void Inkplate13::set_all_pins_low_() {
-  const gpio_num_t pins[] = {
-    PIN(pin_rst_), PIN(pin_dc_),  PIN(pin_cs_m_),
-    PIN(pin_cs_s_), PIN(pin_busy_), PIN(pin_pwr_en_),
-    PIN(pin_bs0_), PIN(pin_bs1_),
+  GPIOPin *pins[] = {
+    pin_rst_, pin_dc_, pin_cs_m_, pin_cs_s_,
+    pin_busy_, pin_pwr_en_, pin_bs0_, pin_bs1_,
   };
-  for (gpio_num_t p : pins) {
-    gpio_set_direction(p, GPIO_MODE_OUTPUT);
-    gpio_set_level(p, 0);
+  for (auto *p : pins) {
+    p->pin_mode(gpio::FLAG_OUTPUT);
+    p->digital_write(false);
   }
 }
 

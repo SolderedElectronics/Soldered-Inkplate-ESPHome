@@ -1,12 +1,12 @@
 #pragma once
 
 #include "esphome/core/component.h"
+#include "esphome/core/gpio.h"
 #include "esphome/core/helpers.h"
 #include "esphome/components/spi/spi.h"
 #include "esphome/components/display/display_buffer.h"
 
 #include <cinttypes>
-#include <vector>
 
 namespace esphome::inkplate_spi {
 
@@ -26,13 +26,13 @@ class InkplateBase : public display::DisplayBuffer,
   // Called by ESPHome before OTA / reboot.
   void on_safe_shutdown() override;
 
-  void set_init_sequence(std::vector<uint8_t> seq) { init_seq_ = std::move(seq); }
+  void set_init_sequence(const uint8_t *seq, size_t len) { init_seq_ = seq; init_seq_len_ = len; }
   void set_full_update_every(int n) { full_update_every_ = n; }
 
-  void set_pin_rst(int p)    { pin_rst_    = p; }
-  void set_pin_dc(int p)     { pin_dc_     = p; }
-  void set_pin_busy(int p)   { pin_busy_   = p; }
-  void set_pin_pwr_en(int p) { pin_pwr_en_ = p; }
+  void set_pin_rst(GPIOPin *p)    { pin_rst_    = p; }
+  void set_pin_dc(GPIOPin *p)     { pin_dc_     = p; }
+  void set_pin_busy(GPIOPin *p)   { pin_busy_   = p; }
+  void set_pin_pwr_en(GPIOPin *p) { pin_pwr_en_ = p; }
 
   display::DisplayType get_display_type() override {
     return display::DisplayType::DISPLAY_TYPE_COLOR;
@@ -100,10 +100,10 @@ class InkplateBase : public display::DisplayBuffer,
   // --- shared data ---
   int      width_{0};
   int      height_{0};
-  int      pin_rst_{0};
-  int      pin_dc_{0};
-  int      pin_busy_{0};
-  int      pin_pwr_en_{0};
+  GPIOPin *pin_rst_{nullptr};
+  GPIOPin *pin_dc_{nullptr};
+  GPIOPin *pin_busy_{nullptr};
+  GPIOPin *pin_pwr_en_{nullptr};
   int      full_update_every_{1};
   int      update_count_{0};
   bool     partial_{false};   // true during a display_partial() cycle
@@ -111,8 +111,9 @@ class InkplateBase : public display::DisplayBuffer,
   int      partial_y_{0};
   int      partial_w_{0};
   int      partial_h_{0};
-  uint8_t *buffer_{nullptr};
-  std::vector<uint8_t> init_seq_;
+  uint8_t        *buffer_{nullptr};
+  const uint8_t  *init_seq_{nullptr};
+  size_t          init_seq_len_{0};
 
  private:
   enum State {

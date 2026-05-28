@@ -83,11 +83,11 @@ void InkplateBase::draw_absolute_pixel_internal(int x, int y, Color color) {
 void InkplateBase::do_init_() {
   // Wire format: [chip, cmd, n_data, data_0 ... data_(n-1)]
   size_t i = 0;
-  while (i < init_seq_.size()) {
+  while (i < init_seq_len_) {
     uint8_t chip = init_seq_[i++];
     uint8_t cmd  = init_seq_[i++];
     uint8_t n    = init_seq_[i++];
-    send_command_to_chip_(cmd, init_seq_.data() + i, n, chip);
+    this->send_command_to_chip_(cmd, init_seq_ + i, n, chip);
     i += n;
   }
 }
@@ -99,7 +99,7 @@ void InkplateBase::do_init_() {
 void InkplateBase::set_state_(State s) {
   ESP_LOGD(TAG, "state %d → %d", (int) state_, (int) s);
   state_          = s;
-  state_start_ms_ = millis();
+  state_start_ms_ = App.get_loop_component_start_time();
   if (s == STATE_IDLE) this->disable_loop();
 }
 

@@ -11,10 +11,10 @@ class Inkplate13 : public InkplateBase {
   void dump_config() override;
 
   // Inkplate13-specific pin setters (dual-chip + bus-select pins)
-  void set_pin_cs_m(int p) { pin_cs_m_ = p; }
-  void set_pin_cs_s(int p) { pin_cs_s_ = p; }
-  void set_pin_bs0(int p)  { pin_bs0_  = p; }
-  void set_pin_bs1(int p)  { pin_bs1_  = p; }
+  void set_pin_cs_m(GPIOPin *p) { pin_cs_m_ = p; }
+  void set_pin_cs_s(GPIOPin *p) { pin_cs_s_ = p; }
+  void set_pin_bs0(GPIOPin *p)  { pin_bs0_  = p; }
+  void set_pin_bs1(GPIOPin *p)  { pin_bs1_  = p; }
 
   // Trigger a partial (subregion) update. x/y/w/h are in logical (rotated) coords.
   // The buffer must already contain the updated pixels before calling this.
@@ -39,10 +39,10 @@ class Inkplate13 : public InkplateBase {
 
  private:
   // Inkplate13-specific pin storage
-  int pin_cs_m_{0};
-  int pin_cs_s_{0};
-  int pin_bs0_{0};
-  int pin_bs1_{0};
+  GPIOPin *pin_cs_m_{nullptr};
+  GPIOPin *pin_cs_s_{nullptr};
+  GPIOPin *pin_bs0_{nullptr};
+  GPIOPin *pin_bs1_{nullptr};
 
   // Power-on sub-states (GPIO setup + delays + reset)
   enum PowerOnSub {
