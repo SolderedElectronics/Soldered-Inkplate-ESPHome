@@ -1,21 +1,90 @@
-# Soldered Inkplate 13 ESPHome
+# Soldered Inkplate ESPHome
 
-ESPHome implementation for Inkplate 13 Spectra.
+ESPHome external component for Inkplate e-paper displays.
 
 > [!IMPORTANT]
 > This repo will be migrated to the official ESPHome repo, until then use this one.
 
-### Usage
+## Supported boards
 
-To include this repo in your ESPHome project, use the following in your `.yaml` file.
+| Model | Resolution | Colors | Partial update | MCU | PSRAM |
+|-------|-----------|--------|----------------|-----|-------|
+| Inkplate 13 | 1200 × 1600 | 6-color ACeP | Yes | ESP32-S3 | Octal, 80 MHz |
+| Inkplate 6 Color | 600 × 448 | 7-color ACeP | No | ESP32 | Quad, 40 MHz |
+| Inkplate 2 | 104 × 212 | Black / White / Red | No | ESP32 | Quad, 40 MHz |
 
-```
+> [!WARNING]
+> PSRAM is required — the framebuffer is too large for internal RAM. Inkplate 13 needs ~960 KB (octal PSRAM on ESP32-S3). Inkplate 2 and 6 Color need ~27 KB and ~135 KB respectively (quad PSRAM on ESP32).
+
+## Usage
+
+Add to your ESPHome `.yaml`:
+
+```yaml
 external_components:
   - source:
       type: git
-      url: https://github.com/SolderedElectronics/Soldered-Inkplate13-ESPHome
+      url: https://github.com/SolderedElectronics/Soldered-Inkplate-ESPHome
       ref: main
 ```
+
+Then declare the display:
+
+```yaml
+esphome:
+  name: my-inkplate
+  on_boot:
+    priority: -100    # run after all components initialised
+    then:
+      - component.update: my_display
+
+spi:
+  clk_pin: GPIOX
+  mosi_pin: GPIOX    # MISO not needed — display is write-only
+
+display:
+  platform: inkplate_spi
+  model: inkplate13         # inkplate13 | inkplate6color | inkplate2
+  id: my_display
+  update_interval: never    # trigger manually; use a time interval for auto-refresh
+  lambda: |-
+    it.fill(Color(255, 255, 255));
+    it.print(10, 10, id(my_font), "Hello!");
+```
+
+The `on_boot` trigger is needed because the display does not draw automatically on startup — `component.update` kicks off the first refresh after all components have initialised.
+
+`update_interval: never` is recommended for battery-powered use and for ACeP panels where refresh rate must be controlled. Use a `time` component or `interval:` block to trigger updates instead.
+
+### Configuration options
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `model` | yes | — | Board model (see table above) |
+| `update_interval` | no | — | How often to trigger a full refresh |
+| `full_update_every` | no | `1` | Trigger full refresh every N updates |
+| `rotation` | no | `0°` | Display rotation (0 / 90 / 180 / 270) |
+| `lambda` | no | — | Drawing lambda |
+
+Pin defaults match the stock Inkplate hardware. Override any pin by adding e.g. `pin_rst: GPIO4` to the display block.
+
+> [!CAUTION]
+> Inkplate 13 enforces a **30 second minimum** between full refreshes. The component will reject a shorter `update_interval` at config validation time. ACeP panels can be permanently damaged by too-frequent refreshes.
+
+### Inkplate 13 — partial update
+
+Inkplate 13 supports refreshing a subregion without a full-panel redraw:
+
+```cpp
+// inside a lambda or interval action
+if (!id(my_display).is_busy()) {
+    id(my_display).filled_rectangle(x, y, w, h, Color(255, 255, 255));
+    id(my_display).print(x, y, id(my_font), "updated");
+    id(my_display).display_partial(x, y, w, h);
+}
+```
+
+---
 
 ### About Soldered
 
