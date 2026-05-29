@@ -1,0 +1,102 @@
+esphome:
+  name: inkplate2-test
+  friendly_name: Inkplate 2 Test
+  on_boot:
+    priority: -100  # run after all components initialised
+    then:
+      - component.update: my_inkplate2
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+spi:
+  id: spi_display
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 16
+  - file: "gfonts://Roboto"
+    id: font_body
+    size: 12
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 10
+
+display:
+  platform: inkplate_spi
+  model: inkplate2
+  id: my_inkplate2
+  spi_id: spi_display
+  rotation: 270°
+  update_interval: never
+  lambda: |-
+    const int W = it.get_width();   // 212 (after 270° rotation)
+    const int H = it.get_height();  // 104 (after 270° rotation)
+
+    const Color C_BLACK = Color(0,   0,   0  );
+    const Color C_WHITE = Color(255, 255, 255);
+    const Color C_RED   = Color(255, 0,   0  );
+
+    it.fill(C_WHITE);
+
+    // Header — black strip with class + level
+    it.filled_rectangle(0, 0, W, 20, C_BLACK);
+    it.print(8,   2, id(font_title), C_WHITE, "ROGUE");
+    it.print(W-8, 2, id(font_title), C_WHITE, display::TextAlign::RIGHT, "LVL  8");
+
+    // Name + race
+    it.print(8,   24, id(font_body), C_BLACK, "Kira Vex");
+    it.print(W-8, 24, id(font_body), C_BLACK, display::TextAlign::RIGHT, "Half-Elf");
+
+    it.horizontal_line(0, 38, W, C_BLACK);
+
+    // HP bar — always RED
+    it.print(4, 41, id(font_small), C_BLACK, "HP");
+    it.rectangle(24, 41, 144, 10, C_BLACK);
+    it.filled_rectangle(24, 41, 144 * 62 / 78, 10, C_RED);
+    it.print(W-4, 41, id(font_small), C_BLACK, display::TextAlign::RIGHT, "62/78");
+
+    it.horizontal_line(0, 56, W, C_BLACK);
+
+    // Stats — 3 per row with mini bars
+    const char *labels[] = {"STR","DEX","CON","INT","WIS","CHA"};
+    const int   vals[]   = {  10,   18,   13,   14,   12,   15 };
+
+    for (int i = 0; i < 6; i++) {
+      int col = i % 3;
+      int row = i / 3;
+      int bx  = 4 + col * 70;
+      int by  = 60 + row * 16;
+      it.print(bx, by, id(font_small), C_BLACK, labels[i]);
+      it.rectangle(bx + 22, by, 26, 8, C_BLACK);
+      it.filled_rectangle(bx + 22, by, 26 * vals[i] / 20, 8, C_BLACK);
+      char buf[4];
+      snprintf(buf, sizeof(buf), "%d", vals[i]);
+      it.print(bx + 50, by, id(font_small), C_BLACK, buf);
+    }
+
+    it.horizontal_line(0, 88, W, C_BLACK);
+
+    // XP bar — progress to next level
+    it.print(4, 91, id(font_small), C_BLACK, "XP");
+    it.rectangle(24, 91, 140, 8, C_BLACK);
+    it.filled_rectangle(24, 91, 140 * 65 / 100, 8, C_BLACK);
+    it.print(W-4, 91, id(font_small), C_BLACK, display::TextAlign::RIGHT, "65%");

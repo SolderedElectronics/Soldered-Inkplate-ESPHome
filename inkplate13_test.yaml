@@ -1,6 +1,10 @@
 esphome:
   name: inkplate13-test
   friendly_name: Inkplate 13 Test
+  on_boot:
+    priority: -100  # run after all components initialised
+    then:
+      - component.update: my_inkplate13
 
 esp32:
   framework:
@@ -9,9 +13,8 @@ esp32:
 
 external_components:
   - source:
-      type: git
-      url: https://github.com/SolderedElectronics/Soldered-Inkplate13-ESPHome
-      ref: dev
+      type: local
+      path: components
 
 psram:
   mode: octal
@@ -25,14 +28,12 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
+# workaround because it defaults to the wrong spi bus
 spi:
-  - id: spi_dummy
-    clk_pin: GPIO47
-    mosi_pin: GPIO48
-  - id: spi_display
-    clk_pin: GPIO38
-    mosi_pin: GPIO40
-    miso_pin: GPIO41
+  id: spi_display
+  clk_pin: GPIO38
+  mosi_pin: GPIO40
+  miso_pin: GPIO41
 
 font:
   - file: "gfonts://Roboto"
@@ -55,7 +56,8 @@ image:
     resize: 300x300
 
 display:
-  platform: inkplate13
+  platform: inkplate_spi
+  model: inkplate13
   id: my_inkplate13
   spi_id: spi_display
   rotation: 270
@@ -171,20 +173,26 @@ display:
                 "BATTERY",     "78",   "%",
                 0.78f, C_GREEN);
 
-    // Counter strip — always drawn into buffer
+    // Counter strip — updated by partial refresh every 10 s
     static int update_count = 0;
     update_count++;
     char count_buf[48];
-    snprintf(count_buf, sizeof(count_buf), "Refresh #%d  (%s)",
-             update_count, (update_count % 6 == 1) ? "FULL" : "partial");
-    const int PX = 370, PY = 1160, PW = 1200, PH = 40;
-    it.filled_rectangle(PX, PY, PW, PH, C_WHITE);
-    it.print(PX + 8, PY + 4, id(font_small), C_BLACK, count_buf);
+    snprintf(count_buf, sizeof(count_buf), "Full refresh #%d", update_count);
+    it.filled_rectangle(370, 1160, 1200, 40, C_WHITE);
+    it.print(378, 1164, id(font_small), C_BLACK, count_buf);
 
-    // Pattern: full on count 1, 7, 13 … (every 6th); 5 partials in between
-    auto &panel = static_cast<esphome::inkplate13::Inkplate13 &>(it);
-    if (update_count % 6 == 1) {
-      panel.display();
-    } else {
-      panel.display_partial(PX, PY, PW, PH);
-    }
+interval:
+  # Partial update: redraw only the counter strip every 10 s.
+  # The full dashboard refresh still happens every 60 s via update_interval above.
+  # Logical canvas (rotation=270): 1600x1200 — counter strip is at y=1160, h=40.
+  - interval: 30s
+    then:
+      - lambda: |-
+          if (id(my_inkplate13).is_busy()) return;
+          static int partial_count = 0;
+          partial_count++;
+          char buf[48];
+          snprintf(buf, sizeof(buf), "Partial refresh #%d", partial_count);
+          id(my_inkplate13).filled_rectangle(370, 1160, 1200, 40, Color(255, 255, 255));
+          id(my_inkplate13).print(378, 1164, id(font_small), Color(0, 0, 0), buf);
+          id(my_inkplate13).display_partial(370, 1160, 1200, 40);
