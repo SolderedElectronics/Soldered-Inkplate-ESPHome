@@ -1,0 +1,51 @@
+esphome:
+  name: inkplate6color-lvgl-test
+  friendly_name: Inkplate 6 Color LVGL Test
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/SolderedElectronics/Soldered-Inkplate-ESPHome
+      ref: main
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+spi:
+  id: spi_display
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+display:
+  platform: inkplate_spi
+  model: inkplate6color
+  id: my_display
+  update_interval: never    # LVGL renders into buffer; hardware push controlled by interval below
+
+lvgl:
+  displays:
+    - my_display
+  widgets:
+    - label:
+        text: "Hello LVGL"
+        align: CENTER
+
+# Push buffer to panel every 60 s, only when display is not mid-refresh.
+interval:
+  - interval: 60s
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(my_display).is_busy();'
+          then:
+            - component.update: my_display
