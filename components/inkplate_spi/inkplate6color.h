@@ -25,12 +25,12 @@ class Inkplate6Color : public InkplateBase {
   void    prepare_for_update_() override;
 
   bool do_power_on_step_()  override;
-  void do_send_pon_()       override;
+  bool do_send_pon_()       override;
   bool do_transfer_step_()  override;
   void do_send_refresh_()   override;
   bool do_power_off_step_() override;
   bool is_busy_()           override;
-  void do_deep_sleep_()     override;
+  bool do_deep_sleep_()     override;
   void do_emergency_off_()  override;
 
  private:
@@ -65,11 +65,20 @@ class Inkplate6Color : public InkplateBase {
     POFF_DONE,
   };
 
-  PowerOnSub  pon_sub_{PON_SETUP};
-  TransferSub trf_sub_{TRF_START_DTM};
-  PowerOffSub poff_sub_{POFF_SEND};
-  uint32_t    sub_start_ms_{0};
-  size_t      trf_row_{0};
+  // Deep-sleep sub-states: 10ms pre-delay → sleep cmd → 100ms post-delay → pin release
+  enum DeepSleepSub {
+    DSLEEP_PRE_DELAY,
+    DSLEEP_SEND,
+    DSLEEP_POST_DELAY,
+  };
+
+  PowerOnSub   pon_sub_{PON_SETUP};
+  TransferSub  trf_sub_{TRF_START_DTM};
+  PowerOffSub  poff_sub_{POFF_SEND};
+  DeepSleepSub dsleep_sub_{DSLEEP_PRE_DELAY};
+  uint32_t     sub_start_ms_{0};
+  size_t       trf_row_{0};
+  bool         pon_settle_started_{false};
 };
 
 }  // namespace esphome::inkplate_spi

@@ -85,7 +85,8 @@ class InkplateBase : public display::DisplayBuffer,
   virtual void do_init_();
 
   // Send power-on command (PON).
-  virtual void do_send_pon_() = 0;
+  // Called every loop() tick during STATE_PON; return true when done.
+  virtual bool do_send_pon_() = 0;
 
   // Send data to panel.
   // Called every loop() tick during STATE_TRANSFER; return true when done.
@@ -102,9 +103,10 @@ class InkplateBase : public display::DisplayBuffer,
   // The panel drives BUSY LOW while working and HIGH when ready.
   virtual bool is_busy_() = 0;
 
-  // Enter panel deep sleep (called once after STATE_POWER_OFF completes).
-  // Default: no-op. Override to drive RST low or send deep-sleep command.
-  virtual void do_deep_sleep_() {}
+  // Enter panel deep sleep.
+  // Called every loop() tick during STATE_DEEP_SLEEP; return true when done.
+  // Default: no-op, returns true immediately.
+  virtual bool do_deep_sleep_() { return true; }
 
   // Emergency hardware power-off called by on_safe_shutdown() if mid-refresh.
   // Default: no-op. Override to cut pwr_en / drive RST low immediately.

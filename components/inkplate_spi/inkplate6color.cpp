@@ -125,13 +125,21 @@ bool Inkplate6Color::do_power_on_step_() {
 
 // ---------------------------------------------------------------------------
 // PON — 100ms settling required after init sequence, then second CDI write.
-// Blocking delay acceptable here: runs once per cycle, well within WDT limit.
+// Non-blocking: timer tracked via pon_settle_started_ + sub_start_ms_.
 // ---------------------------------------------------------------------------
 
-void Inkplate6Color::do_send_pon_() {
-  delay(100);
+bool Inkplate6Color::do_send_pon_() {
+  uint32_t now = App.get_loop_component_start_time();
+  if (!pon_settle_started_) {
+    sub_start_ms_ = now;
+    pon_settle_started_ = true;
+    return false;
+  }
+  if (now - sub_start_ms_ < 100) return false;
+  pon_settle_started_ = false;
   const uint8_t v = 0x37;
   send_command_to_chip_(0x50, &v, 1, 1);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -248,19 +256,33 @@ bool Inkplate6Color::is_busy_() {
 // Deep sleep / emergency off
 // ---------------------------------------------------------------------------
 
-void Inkplate6Color::do_deep_sleep_() {
-  // 10ms before + 100ms after sleep command — from Arduino reference.
+bool Inkplate6Color::do_deep_sleep_() {
+  // 10ms before + 100ms after sleep command — datasheet requirement.
   // RST held low keeps the controller in hardware deep sleep between cycles.
-  const uint8_t v = 0xA5;
-  delay(10);
-  send_command_to_chip_(REG_SLEEP, &v, 1, 1);
-  delay(100);
-  pin_dc_->pin_mode(gpio::FLAG_INPUT);
-  pin_cs_->pin_mode(gpio::FLAG_INPUT);
-  pin_busy_->pin_mode(gpio::FLAG_INPUT);
-  pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
-  pin_rst_->digital_write(false);
-  ESP_LOGD(TAG, "panel deep sleep");
+  uint32_t now = App.get_loop_component_start_time();
+  switch (dsleep_sub_) {
+    case DSLEEP_PRE_DELAY:
+      sub_start_ms_ = now;
+      dsleep_sub_ = DSLEEP_SEND;
+      return false;
+    case DSLEEP_SEND:
+      if (now - sub_start_ms_ < 10) return false;
+      { const uint8_t v = 0xA5; send_command_to_chip_(REG_SLEEP, &v, 1, 1); }
+      sub_start_ms_ = now;
+      dsleep_sub_ = DSLEEP_POST_DELAY;
+      return false;
+    case DSLEEP_POST_DELAY:
+      if (now - sub_start_ms_ < 100) return false;
+      pin_dc_->pin_mode(gpio::FLAG_INPUT);
+      pin_cs_->pin_mode(gpio::FLAG_INPUT);
+      pin_busy_->pin_mode(gpio::FLAG_INPUT);
+      pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
+      pin_rst_->digital_write(false);
+      ESP_LOGD(TAG, "panel deep sleep");
+      dsleep_sub_ = DSLEEP_PRE_DELAY;
+      return true;
+  }
+  return false;
 }
 
 void Inkplate6Color::do_emergency_off_() {

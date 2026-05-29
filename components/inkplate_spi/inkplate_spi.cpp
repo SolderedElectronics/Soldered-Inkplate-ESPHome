@@ -126,7 +126,7 @@ void InkplateBase::process_state_() {
       break;
 
     case STATE_PON:
-      do_send_pon_();
+      if (!do_send_pon_()) return;
       set_state_(STATE_WAIT_PON);
       break;
 
@@ -156,7 +156,7 @@ void InkplateBase::process_state_() {
       break;
 
     case STATE_DEEP_SLEEP:
-      do_deep_sleep_();
+      if (!do_deep_sleep_()) return;
       set_state_(STATE_IDLE);
       break;
   }
