@@ -1,0 +1,74 @@
+esphome:
+  name: inkplate13-led-test
+  friendly_name: Inkplate 13 LED Test
+  on_boot:
+    priority: -100
+    then:
+      - component.update: my_inkplate13
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32s3
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+# TODO: verify SDA/SCL against Inkplate 13 schematic
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  frequency: 400kHz
+
+pca6416a:
+  - id: pcal
+    address: 0x20
+
+switch:
+  - platform: gpio
+    name: "Inkplate LED"
+    id: led_switch
+    pin:
+      pca6416a: pcal
+      number: 0
+      mode:
+        output: true
+      inverted: false
+
+interval:
+  - interval: 500ms
+    then:
+      - switch.toggle: led_switch
+
+spi:
+  id: spi_display
+  clk_pin: GPIO38
+  mosi_pin: GPIO40
+  miso_pin: GPIO41
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_body
+    size: 64
+
+display:
+  platform: inkplate_spi
+  model: inkplate13
+  id: my_inkplate13
+  spi_id: spi_display
+  rotation: 270
+  update_interval: never
+  lambda: |-
+    it.fill(Color(255, 255, 255));
+    it.print(it.get_width() / 2, it.get_height() / 2, id(font_body),
+             Color(0, 0, 0), display::TextAlign::CENTER, "LED Test");
