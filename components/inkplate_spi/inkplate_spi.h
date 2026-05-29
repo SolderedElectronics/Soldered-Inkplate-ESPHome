@@ -38,24 +38,41 @@ class InkplateBase : public display::DisplayBuffer,
   // Called by ESPHome before OTA / reboot.
   void on_safe_shutdown() override;
 
-  void set_init_sequence(const uint8_t *seq, size_t len) { init_seq_ = seq; init_seq_len_ = len; }
-  void set_full_update_every(int n) { full_update_every_ = n; }
+  void set_init_sequence(const uint8_t *seq, size_t len) { this->init_seq_ = seq; this->init_seq_len_ = len; }
+  void set_full_update_every(int n) { this->full_update_every_ = n; }
 
-  void set_pin_rst(GPIOPin *p)    { pin_rst_    = p; }
-  void set_pin_dc(GPIOPin *p)     { pin_dc_     = p; }
-  void set_pin_busy(GPIOPin *p)   { pin_busy_   = p; }
-  void set_pin_pwr_en(GPIOPin *p) { pin_pwr_en_ = p; }
+  void set_pin_rst(GPIOPin *p)    { this->pin_rst_    = p; }
+  void set_pin_dc(GPIOPin *p)     { this->pin_dc_     = p; }
+  void set_pin_busy(GPIOPin *p)   { this->pin_busy_   = p; }
+  void set_pin_pwr_en(GPIOPin *p) { this->pin_pwr_en_ = p; }
 
   display::DisplayType get_display_type() override {
     return display::DisplayType::DISPLAY_TYPE_COLOR;
   }
 
   // Returns true while a full or partial update is in progress.
-  bool is_busy() const { return state_ != STATE_IDLE; }
+  bool is_busy() const { return this->state_ != STATE_IDLE; }
 
  protected:
-  int get_width_internal()  override { return width_; }
-  int get_height_internal() override { return height_; }
+  // Top-level state machine — driven by process_state_() on every loop() tick.
+  // Step states (POWER_ON, TRANSFER, POWER_OFF) call into subclass step functions
+  // that return false until done, then the machine advances to the next state.
+  // Wait states (WAIT_PON, WAIT_REFRESH) poll is_busy_() and yield each tick.
+  enum State {
+    STATE_IDLE,
+    STATE_POWER_ON,
+    STATE_INIT,
+    STATE_PON,
+    STATE_WAIT_PON,
+    STATE_TRANSFER,
+    STATE_REFRESH,
+    STATE_WAIT_REFRESH,
+    STATE_POWER_OFF,
+    STATE_DEEP_SLEEP,
+  };
+
+  int get_width_internal()  override { return this->width_; }
+  int get_height_internal() override { return this->height_; }
 
   void draw_absolute_pixel_internal(int x, int y, Color color) override;
 
@@ -115,6 +132,8 @@ class InkplateBase : public display::DisplayBuffer,
   // Trigger a partial (subregion) update. Stores region, sets partial_ = true,
   // then kicks off STATE_POWER_ON. Buffer must already contain updated pixels.
   void start_partial_update_(int x, int y, int w, int h);
+  void set_state_(State s);
+  void process_state_();
 
   // --- shared data ---
   int      width_{0};
@@ -133,27 +152,6 @@ class InkplateBase : public display::DisplayBuffer,
   uint8_t        *buffer_{nullptr};
   const uint8_t  *init_seq_{nullptr};
   size_t          init_seq_len_{0};
-
- private:
-  // Top-level state machine — driven by process_state_() on every loop() tick.
-  // Step states (POWER_ON, TRANSFER, POWER_OFF) call into subclass step functions
-  // that return false until done, then the machine advances to the next state.
-  // Wait states (WAIT_PON, WAIT_REFRESH) poll is_busy_() and yield each tick.
-  enum State {
-    STATE_IDLE,
-    STATE_POWER_ON,
-    STATE_INIT,
-    STATE_PON,
-    STATE_WAIT_PON,
-    STATE_TRANSFER,
-    STATE_REFRESH,
-    STATE_WAIT_REFRESH,
-    STATE_POWER_OFF,
-    STATE_DEEP_SLEEP,
-  };
-
-  void set_state_(State s);
-  void process_state_();
 
   State    state_{STATE_IDLE};
   uint32_t state_start_ms_{0};

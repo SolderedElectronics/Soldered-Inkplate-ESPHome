@@ -24,15 +24,15 @@ DEPENDENCIES = ["spi"]
 # cg.static_const_array(); the array itself is only emitted when init_bytes is non-empty.
 CONF_INIT_SEQUENCE_ID = "init_sequence_id"
 
-CONF_PIN_RST    = "pin_rst"
-CONF_PIN_DC     = "pin_dc"
-CONF_PIN_BUSY   = "pin_busy"
+CONF_PIN_RST = "pin_rst"
+CONF_PIN_DC = "pin_dc"
+CONF_PIN_BUSY = "pin_busy"
 CONF_PIN_PWR_EN = "pin_pwr_en"
-CONF_PIN_CS_M   = "pin_cs_m"
-CONF_PIN_CS_S   = "pin_cs_s"
-CONF_PIN_BS0    = "pin_bs0"
-CONF_PIN_BS1    = "pin_bs1"
-CONF_PIN_CS     = "pin_cs"
+CONF_PIN_CS_M = "pin_cs_m"
+CONF_PIN_CS_S = "pin_cs_s"
+CONF_PIN_BS0 = "pin_bs0"
+CONF_PIN_BS1 = "pin_bs1"
+CONF_PIN_CS = "pin_cs"
 
 # Auto-load every file in models/ so they self-register into InkplateModel.models
 for _mod in pkgutil.iter_modules(models.__path__):
@@ -50,15 +50,15 @@ _CPP_CLASSES = {
 
 # Maps model pin name → (config key, pin schema validator)
 _PIN_CONF_MAP = {
-    "rst":    (CONF_PIN_RST,    esphome_pins.gpio_output_pin_schema),
-    "dc":     (CONF_PIN_DC,     esphome_pins.gpio_output_pin_schema),
-    "busy":   (CONF_PIN_BUSY,   esphome_pins.gpio_input_pin_schema),
+    "rst": (CONF_PIN_RST, esphome_pins.gpio_output_pin_schema),
+    "dc": (CONF_PIN_DC, esphome_pins.gpio_output_pin_schema),
+    "busy": (CONF_PIN_BUSY, esphome_pins.gpio_input_pin_schema),
     "pwr_en": (CONF_PIN_PWR_EN, esphome_pins.gpio_output_pin_schema),
-    "cs_m":   (CONF_PIN_CS_M,   esphome_pins.gpio_output_pin_schema),
-    "cs_s":   (CONF_PIN_CS_S,   esphome_pins.gpio_output_pin_schema),
-    "bs0":    (CONF_PIN_BS0,    esphome_pins.gpio_output_pin_schema),
-    "bs1":    (CONF_PIN_BS1,    esphome_pins.gpio_output_pin_schema),
-    "cs":     (CONF_PIN_CS,     esphome_pins.gpio_output_pin_schema),
+    "cs_m": (CONF_PIN_CS_M, esphome_pins.gpio_output_pin_schema),
+    "cs_s": (CONF_PIN_CS_S, esphome_pins.gpio_output_pin_schema),
+    "bs0": (CONF_PIN_BS0, esphome_pins.gpio_output_pin_schema),
+    "bs1": (CONF_PIN_BS1, esphome_pins.gpio_output_pin_schema),
+    "cs": (CONF_PIN_CS, esphome_pins.gpio_output_pin_schema),
 }
 
 
@@ -112,20 +112,21 @@ FINAL_VALIDATE_SCHEMA = _final_validate
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(next(iter(_CPP_CLASSES.values()))),  # placeholder — overwritten by _set_model_id_type
+            # placeholder type — overwritten by _set_model_id_type validator
+            cv.GenerateID(): cv.declare_id(next(iter(_CPP_CLASSES.values()))),
             cv.GenerateID(CONF_INIT_SEQUENCE_ID): cv.declare_id(cg.uint8),
             cv.Required(CONF_MODEL): cv.one_of(*MODELS, lower=True),
             cv.Optional(CONF_FULL_UPDATE_EVERY, default=1): cv.positive_int,
             # Pin overrides — optional, defaults injected from model by _inject_model_pins
-            cv.Optional(CONF_PIN_RST):    esphome_pins.gpio_output_pin_schema,
-            cv.Optional(CONF_PIN_DC):     esphome_pins.gpio_output_pin_schema,
-            cv.Optional(CONF_PIN_BUSY):   esphome_pins.gpio_input_pin_schema,
+            cv.Optional(CONF_PIN_RST): esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_DC): esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_BUSY): esphome_pins.gpio_input_pin_schema,
             cv.Optional(CONF_PIN_PWR_EN): esphome_pins.gpio_output_pin_schema,
-            cv.Optional(CONF_PIN_CS_M):   esphome_pins.gpio_output_pin_schema,
-            cv.Optional(CONF_PIN_CS_S):   esphome_pins.gpio_output_pin_schema,
-            cv.Optional(CONF_PIN_BS0):    esphome_pins.gpio_output_pin_schema,
-            cv.Optional(CONF_PIN_BS1):    esphome_pins.gpio_output_pin_schema,
-            cv.Optional(CONF_PIN_CS):     esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_CS_M): esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_CS_S): esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_BS0): esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_BS1): esphome_pins.gpio_output_pin_schema,
+            cv.Optional(CONF_PIN_CS): esphome_pins.gpio_output_pin_schema,
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -148,18 +149,24 @@ async def to_code(config):
     cg.add(var.set_full_update_every(config[CONF_FULL_UPDATE_EVERY]))
     cg.add(var.set_data_rate(model.spi_data_rate))
 
-    # Output pins
-    for conf_key in [CONF_PIN_RST, CONF_PIN_DC, CONF_PIN_PWR_EN,
-                     CONF_PIN_CS_M, CONF_PIN_CS_S, CONF_PIN_BS0, CONF_PIN_BS1, CONF_PIN_CS]:
-        if conf_key not in config:
-            continue
-        pin = await cg.gpio_pin_expression(config[conf_key])
-        cg.add(getattr(var, f"set_{conf_key}")(pin))
-
-    # Input pin
+    if CONF_PIN_RST in config:
+        cg.add(var.set_pin_rst(await cg.gpio_pin_expression(config[CONF_PIN_RST])))
+    if CONF_PIN_DC in config:
+        cg.add(var.set_pin_dc(await cg.gpio_pin_expression(config[CONF_PIN_DC])))
+    if CONF_PIN_PWR_EN in config:
+        cg.add(var.set_pin_pwr_en(await cg.gpio_pin_expression(config[CONF_PIN_PWR_EN])))
+    if CONF_PIN_CS_M in config:
+        cg.add(var.set_pin_cs_m(await cg.gpio_pin_expression(config[CONF_PIN_CS_M])))
+    if CONF_PIN_CS_S in config:
+        cg.add(var.set_pin_cs_s(await cg.gpio_pin_expression(config[CONF_PIN_CS_S])))
+    if CONF_PIN_BS0 in config:
+        cg.add(var.set_pin_bs0(await cg.gpio_pin_expression(config[CONF_PIN_BS0])))
+    if CONF_PIN_BS1 in config:
+        cg.add(var.set_pin_bs1(await cg.gpio_pin_expression(config[CONF_PIN_BS1])))
+    if CONF_PIN_CS in config:
+        cg.add(var.set_pin_cs(await cg.gpio_pin_expression(config[CONF_PIN_CS])))
     if CONF_PIN_BUSY in config:
-        pin = await cg.gpio_pin_expression(config[CONF_PIN_BUSY])
-        cg.add(var.set_pin_busy(pin))
+        cg.add(var.set_pin_busy(await cg.gpio_pin_expression(config[CONF_PIN_BUSY])))
 
     await display.register_display(var, config)
     await spi.register_spi_device(var, config, write_only=True)

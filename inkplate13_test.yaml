@@ -30,13 +30,10 @@ wifi:
 
 # workaround because it defaults to the wrong spi bus
 spi:
-  - id: spi_dummy
-    clk_pin: GPIO47
-    mosi_pin: GPIO48
-  - id: spi_display
-    clk_pin: GPIO38
-    mosi_pin: GPIO40
-    miso_pin: GPIO41
+  id: spi_display
+  clk_pin: GPIO38
+  mosi_pin: GPIO40
+  miso_pin: GPIO41
 
 font:
   - file: "gfonts://Roboto"

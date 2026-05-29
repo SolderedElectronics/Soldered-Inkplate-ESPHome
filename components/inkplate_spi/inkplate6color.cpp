@@ -16,7 +16,7 @@ static constexpr uint8_t REG_SLEEP = 0x07;
 // ---------------------------------------------------------------------------
 
 void Inkplate6Color::dump_config() {
-  ESP_LOGCONFIG(TAG, "Inkplate 6 Color %dx%d", width_, height_);
+  ESP_LOGCONFIG(TAG, "Inkplate 6 Color %dx%d", this->width_, this->height_);
 }
 
 // ---------------------------------------------------------------------------
@@ -43,20 +43,20 @@ uint8_t Inkplate6Color::map_color_to_index_(Color color) {
 // ---------------------------------------------------------------------------
 
 void Inkplate6Color::send_command_to_chip_(uint8_t cmd, const uint8_t *data, size_t len, uint8_t /*chip*/) {
-  pin_cs_->digital_write(false);
-  pin_dc_->digital_write(false);
+  this->pin_cs_->digital_write(false);
+  this->pin_dc_->digital_write(false);
   this->enable();
   this->write_byte(cmd);
   this->disable();
-  pin_cs_->digital_write(true);
+  this->pin_cs_->digital_write(true);
 
   if (len > 0 && data != nullptr) {
-    pin_cs_->digital_write(false);
-    pin_dc_->digital_write(true);
+    this->pin_cs_->digital_write(false);
+    this->pin_dc_->digital_write(true);
     this->enable();
     this->write_array(data, len);
     this->disable();
-    pin_cs_->digital_write(true);
+    this->pin_cs_->digital_write(true);
   }
 }
 
@@ -65,11 +65,13 @@ void Inkplate6Color::send_command_to_chip_(uint8_t cmd, const uint8_t *data, siz
 // ---------------------------------------------------------------------------
 
 void Inkplate6Color::prepare_for_update_() {
-  pon_sub_      = PON_SETUP;
-  trf_sub_      = TRF_START_DTM;
-  poff_sub_     = POFF_SEND;
-  sub_start_ms_ = 0;
-  trf_row_      = 0;
+  this->pon_sub_            = PON_SETUP;
+  this->trf_sub_            = TRF_START_DTM;
+  this->poff_sub_           = POFF_SEND;
+  this->dsleep_sub_         = DSLEEP_PRE_DELAY;
+  this->sub_start_ms_       = 0;
+  this->trf_row_            = 0;
+  this->pon_settle_started_ = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,43 +80,43 @@ void Inkplate6Color::prepare_for_update_() {
 
 bool Inkplate6Color::do_power_on_step_() {
   uint32_t now = App.get_loop_component_start_time();
-  switch (pon_sub_) {
+  switch (this->pon_sub_) {
 
     case PON_SETUP:
-      pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
-      pin_dc_->pin_mode(gpio::FLAG_OUTPUT);
-      pin_cs_->pin_mode(gpio::FLAG_OUTPUT);
-      pin_busy_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
-      pin_dc_->digital_write(true);    // idle high
-      pin_cs_->digital_write(true);    // deselected
-      pin_rst_->digital_write(false);  // hold RST low during pre-wait
-      sub_start_ms_ = now;
-      pon_sub_ = PON_PRE_WAIT;
+      this->pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
+      this->pin_dc_->pin_mode(gpio::FLAG_OUTPUT);
+      this->pin_cs_->pin_mode(gpio::FLAG_OUTPUT);
+      this->pin_busy_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
+      this->pin_dc_->digital_write(true);    // idle high
+      this->pin_cs_->digital_write(true);    // deselected
+      this->pin_rst_->digital_write(false);  // hold RST low during pre-wait
+      this->sub_start_ms_ = now;
+      this->pon_sub_ = PON_PRE_WAIT;
       return false;
 
     case PON_PRE_WAIT:
       // RST held low for 100ms before the reset pulse — discharges panel
       // capacitors. From Arduino reference; skipping causes init failures.
-      if (now - sub_start_ms_ < 100) return false;
-      sub_start_ms_ = now;
-      pon_sub_ = PON_RST_LOW_WAIT;
+      if (now - this->sub_start_ms_ < 100) return false;
+      this->sub_start_ms_ = now;
+      this->pon_sub_ = PON_RST_LOW_WAIT;
       return false;
 
     case PON_RST_LOW_WAIT:
-      if (now - sub_start_ms_ < 10) return false;
-      pin_rst_->digital_write(true);
-      sub_start_ms_ = now;
-      pon_sub_ = PON_RST_HIGH_WAIT;
+      if (now - this->sub_start_ms_ < 10) return false;
+      this->pin_rst_->digital_write(true);
+      this->sub_start_ms_ = now;
+      this->pon_sub_ = PON_RST_HIGH_WAIT;
       return false;
 
     case PON_RST_HIGH_WAIT:
-      if (now - sub_start_ms_ < 200) return false;
-      pon_sub_ = PON_WAIT_BUSY;
+      if (now - this->sub_start_ms_ < 200) return false;
+      this->pon_sub_ = PON_WAIT_BUSY;
       return false;
 
     case PON_WAIT_BUSY:
-      if (!is_busy_()) return false;  // wait BUSY HIGH — panel ready after reset
-      pon_sub_ = PON_DONE;
+      if (!this->is_busy_()) return false;  // wait BUSY HIGH — panel ready after reset
+      this->pon_sub_ = PON_DONE;
       return true;
 
     case PON_DONE:
@@ -130,15 +132,15 @@ bool Inkplate6Color::do_power_on_step_() {
 
 bool Inkplate6Color::do_send_pon_() {
   uint32_t now = App.get_loop_component_start_time();
-  if (!pon_settle_started_) {
-    sub_start_ms_ = now;
-    pon_settle_started_ = true;
+  if (!this->pon_settle_started_) {
+    this->sub_start_ms_ = now;
+    this->pon_settle_started_ = true;
     return false;
   }
-  if (now - sub_start_ms_ < 100) return false;
-  pon_settle_started_ = false;
+  if (now - this->sub_start_ms_ < 100) return false;
+  this->pon_settle_started_ = false;
   const uint8_t v = 0x37;
-  send_command_to_chip_(0x50, &v, 1, 1);
+  this->send_command_to_chip_(0x50, &v, 1, 1);
   return true;
 }
 
@@ -149,54 +151,53 @@ bool Inkplate6Color::do_send_pon_() {
 
 bool Inkplate6Color::do_transfer_step_() {
   // 8 rows × 300 bytes = 2400 bytes per tick (~9.6ms at 2MHz, ~0.19ms at 10MHz)
-  static constexpr size_t ROWS_PER_CHUNK = 8;
-  const size_t rows          = (size_t) height_;
-  const size_t bytes_per_row = (size_t) width_ / 2;
+  const size_t rows          = (size_t) this->height_;
+  const size_t bytes_per_row = (size_t) this->width_ / 2;
 
-  switch (trf_sub_) {
+  switch (this->trf_sub_) {
 
     case TRF_START_DTM: {
       // 0x61 (resolution) already sent in init_sequence — no need to repeat here.
       // Send DTM command byte as its own CS transaction (DC low)
-      pin_cs_->digital_write(false);
-      pin_dc_->digital_write(false);
+      this->pin_cs_->digital_write(false);
+      this->pin_dc_->digital_write(false);
       this->enable();
       this->write_byte(REG_DTM);
       this->disable();
-      pin_cs_->digital_write(true);
+      this->pin_cs_->digital_write(true);
 
       // Open data transaction (DC high, CS low) — held open across ticks
-      pin_cs_->digital_write(false);
-      pin_dc_->digital_write(true);
+      this->pin_cs_->digital_write(false);
+      this->pin_dc_->digital_write(true);
       this->enable();
-      trf_row_ = 0;
-      trf_sub_ = TRF_STREAM_DATA;
+      this->trf_row_ = 0;
+      this->trf_sub_ = TRF_STREAM_DATA;
       ESP_LOGD(TAG, "transfer: DTM start");
       return false;
     }
 
     case TRF_STREAM_DATA: {
-      size_t end = std::min(trf_row_ + ROWS_PER_CHUNK, rows);
-      for (size_t i = trf_row_; i < end; i++)
-        this->write_array(buffer_ + i * bytes_per_row, bytes_per_row);
-      trf_row_ = end;
-      if (trf_row_ >= rows) {
+      size_t end = std::min(this->trf_row_ + ROWS_PER_CHUNK, rows);
+      for (size_t i = this->trf_row_; i < end; i++)
+        this->write_array(this->buffer_ + i * bytes_per_row, bytes_per_row);
+      this->trf_row_ = end;
+      if (this->trf_row_ >= rows) {
         this->disable();
-        pin_cs_->digital_write(true);
-        trf_sub_ = TRF_SEND_PON;
+        this->pin_cs_->digital_write(true);
+        this->trf_sub_ = TRF_SEND_PON;
         ESP_LOGD(TAG, "transfer: DTM done");
       }
       return false;
     }
 
     case TRF_SEND_PON:
-      send_command_to_chip_(REG_PON, nullptr, 0, 1);
-      trf_sub_ = TRF_WAIT_PON_BUSY;
+      this->send_command_to_chip_(REG_PON, nullptr, 0, 1);
+      this->trf_sub_ = TRF_WAIT_PON_BUSY;
       return false;
 
     case TRF_WAIT_PON_BUSY:
-      if (!is_busy_()) return false;  // wait BUSY HIGH
-      trf_sub_ = TRF_DONE;
+      if (!this->is_busy_()) return false;  // wait BUSY HIGH
+      this->trf_sub_ = TRF_DONE;
       return true;
 
     case TRF_DONE:
@@ -210,7 +211,7 @@ bool Inkplate6Color::do_transfer_step_() {
 // ---------------------------------------------------------------------------
 
 void Inkplate6Color::do_send_refresh_() {
-  send_command_to_chip_(REG_DRF, nullptr, 0, 1);
+  this->send_command_to_chip_(REG_DRF, nullptr, 0, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -220,22 +221,22 @@ void Inkplate6Color::do_send_refresh_() {
 
 bool Inkplate6Color::do_power_off_step_() {
   uint32_t now = App.get_loop_component_start_time();
-  switch (poff_sub_) {
+  switch (this->poff_sub_) {
 
     case POFF_SEND:
-      send_command_to_chip_(REG_POF, nullptr, 0, 1);
-      poff_sub_ = POFF_WAIT;
+      this->send_command_to_chip_(REG_POF, nullptr, 0, 1);
+      this->poff_sub_ = POFF_WAIT;
       return false;
 
     case POFF_WAIT:
-      if (is_busy_()) return false;  // BUSY still HIGH — wait for it to go LOW
-      sub_start_ms_ = now;
-      poff_sub_ = POFF_DELAY;
+      if (this->is_busy_()) return false;  // BUSY still HIGH — wait for it to go LOW
+      this->sub_start_ms_ = now;
+      this->poff_sub_ = POFF_DELAY;
       return false;
 
     case POFF_DELAY:
-      if (now - sub_start_ms_ < 200) return false;
-      poff_sub_ = POFF_DONE;
+      if (now - this->sub_start_ms_ < 200) return false;
+      this->poff_sub_ = POFF_DONE;
       return true;
 
     case POFF_DONE:
@@ -249,7 +250,7 @@ bool Inkplate6Color::do_power_off_step_() {
 // ---------------------------------------------------------------------------
 
 bool Inkplate6Color::is_busy_() {
-  return pin_busy_->digital_read();
+  return this->pin_busy_->digital_read();
 }
 
 // ---------------------------------------------------------------------------
@@ -260,26 +261,26 @@ bool Inkplate6Color::do_deep_sleep_() {
   // 10ms before + 100ms after sleep command — datasheet requirement.
   // RST held low keeps the controller in hardware deep sleep between cycles.
   uint32_t now = App.get_loop_component_start_time();
-  switch (dsleep_sub_) {
+  switch (this->dsleep_sub_) {
     case DSLEEP_PRE_DELAY:
-      sub_start_ms_ = now;
-      dsleep_sub_ = DSLEEP_SEND;
+      this->sub_start_ms_ = now;
+      this->dsleep_sub_ = DSLEEP_SEND;
       return false;
     case DSLEEP_SEND:
-      if (now - sub_start_ms_ < 10) return false;
-      { const uint8_t v = 0xA5; send_command_to_chip_(REG_SLEEP, &v, 1, 1); }
-      sub_start_ms_ = now;
-      dsleep_sub_ = DSLEEP_POST_DELAY;
+      if (now - this->sub_start_ms_ < 10) return false;
+      { const uint8_t v = 0xA5; this->send_command_to_chip_(REG_SLEEP, &v, 1, 1); }
+      this->sub_start_ms_ = now;
+      this->dsleep_sub_ = DSLEEP_POST_DELAY;
       return false;
     case DSLEEP_POST_DELAY:
-      if (now - sub_start_ms_ < 100) return false;
-      pin_dc_->pin_mode(gpio::FLAG_INPUT);
-      pin_cs_->pin_mode(gpio::FLAG_INPUT);
-      pin_busy_->pin_mode(gpio::FLAG_INPUT);
-      pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
-      pin_rst_->digital_write(false);
+      if (now - this->sub_start_ms_ < 100) return false;
+      this->pin_dc_->pin_mode(gpio::FLAG_INPUT);
+      this->pin_cs_->pin_mode(gpio::FLAG_INPUT);
+      this->pin_busy_->pin_mode(gpio::FLAG_INPUT);
+      this->pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
+      this->pin_rst_->digital_write(false);
       ESP_LOGD(TAG, "panel deep sleep");
-      dsleep_sub_ = DSLEEP_PRE_DELAY;
+      this->dsleep_sub_ = DSLEEP_PRE_DELAY;
       return true;
   }
   return false;
@@ -288,10 +289,10 @@ bool Inkplate6Color::do_deep_sleep_() {
 void Inkplate6Color::do_emergency_off_() {
   // Called by on_safe_shutdown() if mid-refresh (e.g., OTA during update).
   // Best-effort: drive RST low immediately without waiting for busy.
-  pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
-  pin_rst_->digital_write(false);
-  pin_cs_->pin_mode(gpio::FLAG_OUTPUT);
-  pin_cs_->digital_write(true);
+  this->pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
+  this->pin_rst_->digital_write(false);
+  this->pin_cs_->pin_mode(gpio::FLAG_OUTPUT);
+  this->pin_cs_->digital_write(true);
   ESP_LOGW(TAG, "emergency off");
 }
 

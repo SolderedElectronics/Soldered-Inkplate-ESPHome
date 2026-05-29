@@ -17,24 +17,10 @@ class Inkplate6Color : public InkplateBase {
 
   void dump_config() override;
 
-  void set_pin_cs(GPIOPin *p) { pin_cs_ = p; }
+  void set_pin_cs(GPIOPin *p) { this->pin_cs_ = p; }
 
  protected:
-  uint8_t map_color_to_index_(Color color) override;
-  void    send_command_to_chip_(uint8_t cmd, const uint8_t *data, size_t len, uint8_t chip) override;
-  void    prepare_for_update_() override;
-
-  bool do_power_on_step_()  override;
-  bool do_send_pon_()       override;
-  bool do_transfer_step_()  override;
-  void do_send_refresh_()   override;
-  bool do_power_off_step_() override;
-  bool is_busy_()           override;
-  bool do_deep_sleep_()     override;
-  void do_emergency_off_()  override;
-
- private:
-  GPIOPin *pin_cs_{nullptr};
+  static constexpr size_t ROWS_PER_CHUNK = 8;
 
   // Power-on sub-states: GPIO setup → 100ms pre-wait → RST pulse → BUSY wait
   enum PowerOnSub {
@@ -72,6 +58,19 @@ class Inkplate6Color : public InkplateBase {
     DSLEEP_POST_DELAY,
   };
 
+  uint8_t map_color_to_index_(Color color) override;
+  void    send_command_to_chip_(uint8_t cmd, const uint8_t *data, size_t len, uint8_t chip) override;
+  void    prepare_for_update_() override;
+  bool do_power_on_step_()  override;
+  bool do_send_pon_()       override;
+  bool do_transfer_step_()  override;
+  void do_send_refresh_()   override;
+  bool do_power_off_step_() override;
+  bool is_busy_()           override;
+  bool do_deep_sleep_()     override;
+  void do_emergency_off_()  override;
+
+  GPIOPin     *pin_cs_{nullptr};
   PowerOnSub   pon_sub_{PON_SETUP};
   TransferSub  trf_sub_{TRF_START_DTM};
   PowerOffSub  poff_sub_{POFF_SEND};

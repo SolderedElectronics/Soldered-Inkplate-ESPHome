@@ -17,7 +17,7 @@ static constexpr uint8_t REG_SLEEP = 0x07;  // deep sleep
 // ---------------------------------------------------------------------------
 
 void Inkplate2::dump_config() {
-  ESP_LOGCONFIG(TAG, "Inkplate 2 %dx%d", width_, height_);
+  ESP_LOGCONFIG(TAG, "Inkplate 2 %dx%d", this->width_, this->height_);
 }
 
 // ---------------------------------------------------------------------------
@@ -38,20 +38,20 @@ uint8_t Inkplate2::map_color_to_index_(Color color) {
 // ---------------------------------------------------------------------------
 
 void Inkplate2::send_command_to_chip_(uint8_t cmd, const uint8_t *data, size_t len, uint8_t /*chip*/) {
-  pin_cs_->digital_write(false);
-  pin_dc_->digital_write(false);
+  this->pin_cs_->digital_write(false);
+  this->pin_dc_->digital_write(false);
   this->enable();
   this->write_byte(cmd);
   this->disable();
-  pin_cs_->digital_write(true);
+  this->pin_cs_->digital_write(true);
 
   if (len > 0 && data != nullptr) {
-    pin_cs_->digital_write(false);
-    pin_dc_->digital_write(true);
+    this->pin_cs_->digital_write(false);
+    this->pin_dc_->digital_write(true);
     this->enable();
     this->write_array(data, len);
     this->disable();
-    pin_cs_->digital_write(true);
+    this->pin_cs_->digital_write(true);
   }
 }
 
@@ -60,11 +60,11 @@ void Inkplate2::send_command_to_chip_(uint8_t cmd, const uint8_t *data, size_t l
 // ---------------------------------------------------------------------------
 
 void Inkplate2::prepare_for_update_() {
-  pon_sub_      = PON_SETUP;
-  trf_sub_      = TRF_SEND_BW;
-  poff_sub_     = POFF_SEND_VCOM;
-  sub_start_ms_ = 0;
-  trf_row_      = 0;
+  this->pon_sub_      = PON_SETUP;
+  this->trf_sub_      = TRF_SEND_BW;
+  this->poff_sub_     = POFF_SEND_VCOM;
+  this->sub_start_ms_ = 0;
+  this->trf_row_      = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,61 +76,61 @@ void Inkplate2::prepare_for_update_() {
 
 bool Inkplate2::do_power_on_step_() {
   uint32_t now = App.get_loop_component_start_time();
-  switch (pon_sub_) {
+  switch (this->pon_sub_) {
 
     case PON_SETUP:
-      pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
-      pin_dc_->pin_mode(gpio::FLAG_OUTPUT);
-      pin_cs_->pin_mode(gpio::FLAG_OUTPUT);
-      pin_busy_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
-      pin_dc_->digital_write(true);    // idle high
-      pin_cs_->digital_write(true);    // deselected
-      pin_rst_->digital_write(false);  // RST low — start reset pulse
-      sub_start_ms_ = now;
-      pon_sub_ = PON_RST_LOW_WAIT;
+      this->pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
+      this->pin_dc_->pin_mode(gpio::FLAG_OUTPUT);
+      this->pin_cs_->pin_mode(gpio::FLAG_OUTPUT);
+      this->pin_busy_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
+      this->pin_dc_->digital_write(true);    // idle high
+      this->pin_cs_->digital_write(true);    // deselected
+      this->pin_rst_->digital_write(false);  // RST low — start reset pulse
+      this->sub_start_ms_ = now;
+      this->pon_sub_ = PON_RST_LOW_WAIT;
       return false;
 
     case PON_RST_LOW_WAIT:
-      if (now - sub_start_ms_ < 100) return false;
-      pin_rst_->digital_write(true);   // RST high — end reset pulse
-      sub_start_ms_ = now;
-      pon_sub_ = PON_RST_HIGH_WAIT;
+      if (now - this->sub_start_ms_ < 100) return false;
+      this->pin_rst_->digital_write(true);   // RST high — end reset pulse
+      this->sub_start_ms_ = now;
+      this->pon_sub_ = PON_RST_HIGH_WAIT;
       return false;
 
     case PON_RST_HIGH_WAIT:
-      if (now - sub_start_ms_ < 100) return false;
-      send_command_to_chip_(0x04, nullptr, 0, 1);  // PON — power on circuitry
-      pon_sub_ = PON_WAIT_PON_BUSY;
+      if (now - this->sub_start_ms_ < 100) return false;
+      this->send_command_to_chip_(0x04, nullptr, 0, 1);  // PON — power on circuitry
+      this->pon_sub_ = PON_WAIT_PON_BUSY;
       return false;
 
     case PON_WAIT_PON_BUSY:
-      if (!is_busy_()) return false;  // wait BUSY HIGH — panel powered on
-      sub_start_ms_ = now;
-      pon_sub_ = PON_PON_BUSY_DELAY;
+      if (!this->is_busy_()) return false;  // wait BUSY HIGH — panel powered on
+      this->sub_start_ms_ = now;
+      this->pon_sub_ = PON_PON_BUSY_DELAY;
       return false;
 
     case PON_PON_BUSY_DELAY:
-      if (now - sub_start_ms_ < 200) return false;  // 200ms from Arduino waitForEpd
-      pon_sub_ = PON_SEND_SETTINGS;
+      if (now - this->sub_start_ms_ < 200) return false;  // 200ms from Arduino waitForEpd
+      this->pon_sub_ = PON_SEND_SETTINGS;
       return false;
 
     case PON_SEND_SETTINGS: {
       const uint8_t ps[]   = {0x0F, 0x89};  // panel setting: LUT from OTP, temp sensor
-      const uint8_t res[]  = {(uint8_t) width_,
-                               (uint8_t)(height_ >> 8),
-                               (uint8_t)(height_ & 0xFF)};
+      const uint8_t res[]  = {(uint8_t) this->width_,
+                               (uint8_t)(this->height_ >> 8),
+                               (uint8_t)(this->height_ & 0xFF)};
       const uint8_t vcom[] = {0x77};  // VCOM and data interval
-      send_command_to_chip_(0x00, ps,   2, 1);
-      send_command_to_chip_(0x61, res,  3, 1);
-      send_command_to_chip_(0x50, vcom, 1, 1);
-      sub_start_ms_ = now;
-      pon_sub_ = PON_BOOT_DELAY;
+      this->send_command_to_chip_(0x00, ps,   2, 1);
+      this->send_command_to_chip_(0x61, res,  3, 1);
+      this->send_command_to_chip_(0x50, vcom, 1, 1);
+      this->sub_start_ms_ = now;
+      this->pon_sub_ = PON_BOOT_DELAY;
       return false;
     }
 
     case PON_BOOT_DELAY:
-      if (now - sub_start_ms_ < 20) return false;  // 20ms from Arduino display() delay
-      pon_sub_ = PON_DONE;
+      if (now - this->sub_start_ms_ < 20) return false;  // 20ms from Arduino display() delay
+      this->pon_sub_ = PON_DONE;
       return true;
 
     case PON_DONE:
@@ -150,34 +150,33 @@ bool Inkplate2::do_power_on_step_() {
 
 bool Inkplate2::do_transfer_step_() {
   // 8 rows × 13 bytes = 104 bytes per tick (~0.8ms at 1MHz)
-  static constexpr size_t ROWS_PER_CHUNK = 8;
-  const size_t rows      = (size_t) height_;
-  const size_t buf_bpr   = (size_t) width_ / 2;  // 4bpp: 52 bytes/row
-  const size_t plane_bpr = (size_t) width_ / 8;  // 1bpp: 13 bytes/row
+  const size_t rows      = (size_t) this->height_;
+  const size_t buf_bpr   = (size_t) this->width_ / 2;  // 4bpp: 52 bytes/row
+  const size_t plane_bpr = (size_t) this->width_ / 8;  // 1bpp: 13 bytes/row
 
-  switch (trf_sub_) {
+  switch (this->trf_sub_) {
 
     case TRF_SEND_BW:
       // DTM1 command byte sent as its own CS transaction (DC low).
       // Data transaction (DC high, CS low) then held open across ticks.
-      pin_cs_->digital_write(false);
-      pin_dc_->digital_write(false);
+      this->pin_cs_->digital_write(false);
+      this->pin_dc_->digital_write(false);
       this->enable();
       this->write_byte(REG_DTM1);
       this->disable();
-      pin_cs_->digital_write(true);
-      pin_cs_->digital_write(false);
-      pin_dc_->digital_write(true);
+      this->pin_cs_->digital_write(true);
+      this->pin_cs_->digital_write(false);
+      this->pin_dc_->digital_write(true);
       this->enable();
-      trf_row_ = 0;
-      trf_sub_ = TRF_STREAM_BW;
+      this->trf_row_ = 0;
+      this->trf_sub_ = TRF_STREAM_BW;
       ESP_LOGD(TAG, "transfer: DTM1 BW start");
       return false;
 
     case TRF_STREAM_BW: {
-      size_t end = std::min(trf_row_ + ROWS_PER_CHUNK, rows);
-      for (size_t r = trf_row_; r < end; r++) {
-        const uint8_t *row = buffer_ + r * buf_bpr;
+      size_t end = std::min(this->trf_row_ + ROWS_PER_CHUNK, rows);
+      for (size_t r = this->trf_row_; r < end; r++) {
+        const uint8_t *row = this->buffer_ + r * buf_bpr;
         for (size_t b = 0; b < plane_bpr; b++) {
           uint8_t byte = 0xFF;
           for (int bit = 0; bit < 8; bit++) {
@@ -189,12 +188,12 @@ bool Inkplate2::do_transfer_step_() {
           this->write_byte(byte);
         }
       }
-      trf_row_ = end;
-      if (trf_row_ >= rows) {
+      this->trf_row_ = end;
+      if (this->trf_row_ >= rows) {
         this->disable();
-        pin_cs_->digital_write(true);
-        trf_row_ = 0;
-        trf_sub_ = TRF_SEND_RED;
+        this->pin_cs_->digital_write(true);
+        this->trf_row_ = 0;
+        this->trf_sub_ = TRF_SEND_RED;
         ESP_LOGD(TAG, "transfer: DTM1 BW done");
       }
       return false;
@@ -202,23 +201,23 @@ bool Inkplate2::do_transfer_step_() {
 
     case TRF_SEND_RED:
       // Same CS pattern as TRF_SEND_BW: command in own transaction, data held open.
-      pin_cs_->digital_write(false);
-      pin_dc_->digital_write(false);
+      this->pin_cs_->digital_write(false);
+      this->pin_dc_->digital_write(false);
       this->enable();
       this->write_byte(REG_DTM2);
       this->disable();
-      pin_cs_->digital_write(true);
-      pin_cs_->digital_write(false);
-      pin_dc_->digital_write(true);
+      this->pin_cs_->digital_write(true);
+      this->pin_cs_->digital_write(false);
+      this->pin_dc_->digital_write(true);
       this->enable();
-      trf_sub_ = TRF_STREAM_RED;
+      this->trf_sub_ = TRF_STREAM_RED;
       ESP_LOGD(TAG, "transfer: DTM2 RED start");
       return false;
 
     case TRF_STREAM_RED: {
-      size_t end = std::min(trf_row_ + ROWS_PER_CHUNK, rows);
-      for (size_t r = trf_row_; r < end; r++) {
-        const uint8_t *row = buffer_ + r * buf_bpr;
+      size_t end = std::min(this->trf_row_ + ROWS_PER_CHUNK, rows);
+      for (size_t r = this->trf_row_; r < end; r++) {
+        const uint8_t *row = this->buffer_ + r * buf_bpr;
         for (size_t b = 0; b < plane_bpr; b++) {
           uint8_t byte = 0xFF;
           for (int bit = 0; bit < 8; bit++) {
@@ -230,11 +229,11 @@ bool Inkplate2::do_transfer_step_() {
           this->write_byte(byte);
         }
       }
-      trf_row_ = end;
-      if (trf_row_ >= rows) {
+      this->trf_row_ = end;
+      if (this->trf_row_ >= rows) {
         this->disable();
-        pin_cs_->digital_write(true);
-        trf_sub_ = TRF_SEND_STOP;
+        this->pin_cs_->digital_write(true);
+        this->trf_sub_ = TRF_SEND_STOP;
         ESP_LOGD(TAG, "transfer: DTM2 RED done");
       }
       return false;
@@ -242,8 +241,8 @@ bool Inkplate2::do_transfer_step_() {
 
     case TRF_SEND_STOP: {
       const uint8_t v = 0x00;
-      send_command_to_chip_(REG_DSTOP, &v, 1, 1);
-      trf_sub_ = TRF_DONE;
+      this->send_command_to_chip_(REG_DSTOP, &v, 1, 1);
+      this->trf_sub_ = TRF_DONE;
       return true;
     }
 
@@ -255,12 +254,10 @@ bool Inkplate2::do_transfer_step_() {
 
 // ---------------------------------------------------------------------------
 // Refresh
-// 500µs blocking delay ensures BUSY transitions LOW before WAIT_REFRESH polls.
 // ---------------------------------------------------------------------------
 
 void Inkplate2::do_send_refresh_() {
-  send_command_to_chip_(REG_DRF, nullptr, 0, 1);
-  delayMicroseconds(500);  // wait for BUSY to de-assert before polling starts
+  this->send_command_to_chip_(REG_DRF, nullptr, 0, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -271,29 +268,29 @@ void Inkplate2::do_send_refresh_() {
 
 bool Inkplate2::do_power_off_step_() {
   uint32_t now = App.get_loop_component_start_time();
-  switch (poff_sub_) {
+  switch (this->poff_sub_) {
 
     case POFF_SEND_VCOM: {
       const uint8_t v = 0xF7;
-      send_command_to_chip_(0x50, &v, 1, 1);
-      poff_sub_ = POFF_SEND_POF;
+      this->send_command_to_chip_(0x50, &v, 1, 1);
+      this->poff_sub_ = POFF_SEND_POF;
       return false;
     }
 
     case POFF_SEND_POF:
-      send_command_to_chip_(REG_POF, nullptr, 0, 1);
-      poff_sub_ = POFF_WAIT;
+      this->send_command_to_chip_(REG_POF, nullptr, 0, 1);
+      this->poff_sub_ = POFF_WAIT;
       return false;
 
     case POFF_WAIT:
-      if (!is_busy_()) return false;  // wait BUSY HIGH — power-off complete
-      sub_start_ms_ = now;
-      poff_sub_ = POFF_DELAY;
+      if (!this->is_busy_()) return false;  // wait BUSY HIGH — power-off complete
+      this->sub_start_ms_ = now;
+      this->poff_sub_ = POFF_DELAY;
       return false;
 
     case POFF_DELAY:
-      if (now - sub_start_ms_ < 200) return false;
-      poff_sub_ = POFF_DONE;
+      if (now - this->sub_start_ms_ < 200) return false;
+      this->poff_sub_ = POFF_DONE;
       return true;
 
     case POFF_DONE:
@@ -307,34 +304,34 @@ bool Inkplate2::do_power_off_step_() {
 // ---------------------------------------------------------------------------
 
 bool Inkplate2::is_busy_() {
-  return pin_busy_->digital_read();
+  return this->pin_busy_->digital_read();
 }
 
 // ---------------------------------------------------------------------------
 // Deep sleep / emergency off
 // ---------------------------------------------------------------------------
 
-void Inkplate2::do_deep_sleep_() {
+bool Inkplate2::do_deep_sleep_() {
   // Controller enters software deep sleep via 0x07/0xA5 command.
   // All pins released to INPUT after — RST not held low since the sleep
   // command itself parks the controller (unlike Inkplate13 which needs RST low).
   const uint8_t v = 0xA5;
-  send_command_to_chip_(REG_SLEEP, &v, 1, 1);
-  delay(1);
-  pin_dc_->pin_mode(gpio::FLAG_INPUT);
-  pin_cs_->pin_mode(gpio::FLAG_INPUT);
-  pin_busy_->pin_mode(gpio::FLAG_INPUT);
-  pin_rst_->pin_mode(gpio::FLAG_INPUT);
+  this->send_command_to_chip_(REG_SLEEP, &v, 1, 1);
+  this->pin_dc_->pin_mode(gpio::FLAG_INPUT);
+  this->pin_cs_->pin_mode(gpio::FLAG_INPUT);
+  this->pin_busy_->pin_mode(gpio::FLAG_INPUT);
+  this->pin_rst_->pin_mode(gpio::FLAG_INPUT);
   ESP_LOGD(TAG, "panel deep sleep");
+  return true;
 }
 
 void Inkplate2::do_emergency_off_() {
   // Called by on_safe_shutdown() if mid-refresh (e.g., OTA during update).
   // Best-effort: drive RST low immediately without waiting for busy.
-  pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
-  pin_rst_->digital_write(false);
-  pin_cs_->pin_mode(gpio::FLAG_OUTPUT);
-  pin_cs_->digital_write(true);
+  this->pin_rst_->pin_mode(gpio::FLAG_OUTPUT);
+  this->pin_rst_->digital_write(false);
+  this->pin_cs_->pin_mode(gpio::FLAG_OUTPUT);
+  this->pin_cs_->digital_write(true);
   ESP_LOGW(TAG, "emergency off");
 }
 

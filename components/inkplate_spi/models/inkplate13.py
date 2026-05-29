@@ -31,8 +31,8 @@ InkplateModel(
         (CHIP_BOTH,   0x86, 0x10),                                                     # AGID
         (CHIP_BOTH,   0xE3, 0x22),                                                     # PWS
         (CHIP_BOTH,   0xE0, 0x01),                                                     # CCSET
-        (CHIP_BOTH,   0x61, 0x04, 0xB0, 0x03, 0x20),                                  # TRES
-        (CHIP_MASTER, 0x01, 0x0F, 0x00, 0x28, 0x2C, 0x28, 0x38),                     # PWR
+        (CHIP_BOTH,   0x61, 0x04, 0xB0, 0x03, 0x20),                                   # TRES
+        (CHIP_MASTER, 0x01, 0x0F, 0x00, 0x28, 0x2C, 0x28, 0x38),                       # PWR
         (CHIP_MASTER, 0xB6, 0x07),                                                     # EN_BUF
         (CHIP_MASTER, 0x06, 0xD8, 0x18),                                               # BTST_P
         (CHIP_MASTER, 0xB7, 0x01),                                                     # BOOST_VDDP_EN
