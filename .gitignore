@@ -59,3 +59,4 @@ secrets.yaml
 .DS_Store
 /components/inkplate_spi/__pycache__
 *.pyc
+/examples/.esphome
