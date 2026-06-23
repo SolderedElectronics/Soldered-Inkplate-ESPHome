@@ -7,6 +7,18 @@ ESPHome external component for Inkplate e-paper displays.
 
 ## Supported boards
 
+### Parallel (non-SPI) — `inkplate` component
+
+| Model | Resolution | Colors | Partial update | Grayscale | MCU |
+|-------|-----------|--------|----------------|-----------|-----|
+| Inkplate 6 | 800 × 600 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 4 | 600 × 600 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 5 | 1280 × 720 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 10 | 1200 × 825 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 6 FLICK | 1024 × 758 | Black / White | Yes | 8 levels | ESP32 |
+
+### SPI — `inkplate_spi` component
+
 | Model | Resolution | Colors | Partial update | MCU | PSRAM |
 |-------|-----------|--------|----------------|-----|-------|
 | Inkplate 13 | 1200 × 1600 | 6-color ACeP | Yes | ESP32-S3 | Octal, 80 MHz |
@@ -14,7 +26,9 @@ ESPHome external component for Inkplate e-paper displays.
 | Inkplate 2 | 104 × 212 | Black / White / Red | No | ESP32 | Quad, 40 MHz |
 
 > [!WARNING]
-> PSRAM is required — the framebuffer is too large for internal RAM. Inkplate 13 needs ~960 KB (octal PSRAM on ESP32-S3). Inkplate 2 and 6 Color need ~27 KB and ~135 KB respectively (quad PSRAM on ESP32).
+> PSRAM is required on all boards — framebuffers are too large for internal RAM.
+
+---
 
 ## Usage
 
@@ -28,13 +42,102 @@ external_components:
       ref: main
 ```
 
-Then declare the display:
+---
+
+### Parallel boards (Inkplate 6 / 4 / 5 / 10 / 6 FLICK)
+
+Parallel boards use the `inkplate` platform. They require an I2C bus (for the TPS65186 PMIC and PCAL6416A GPIO expander) but no SPI.
+
+```yaml
+esphome:
+  name: my-inkplate6
+  on_boot:
+    priority: -100    # run after all components initialised
+    then:
+      - component.update: my_display
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 100000
+
+pca6416a:
+  id: inkplate_pcal
+  address: 0x20
+
+display:
+  platform: inkplate
+  model: inkplate6        # inkplate6 | inkplate4 | inkplate5 | inkplate10 | inkplate6flick
+  id: my_display
+  address: 0x48           # TPS65186 PMIC I2C address
+  pca6416a_id: inkplate_pcal
+  update_interval: 60s
+  lambda: |-
+    it.fill(COLOR_OFF);
+    it.print(400, 300, id(my_font), COLOR_ON, display::TextAlign::CENTER, "Hello!");
+```
+
+The `on_boot` trigger is needed because the display does not draw automatically on startup — `component.update` kicks off the first refresh after all components have initialised.
+
+#### Grayscale mode
+
+Parallel boards support 8-level grayscale. Enable it in the display config:
+
+```yaml
+display:
+  platform: inkplate
+  model: inkplate6
+  grayscale_mode: true
+  lambda: |-
+    it.filled_rectangle(0, 0, 100, 100, Color(3, 3, 3));  # mid-gray (0–7 range)
+```
+
+#### Partial update
+
+Partial update refreshes only changed pixels — much faster than a full refresh but can accumulate ghosting over time. A full update clears ghosting.
+
+```cpp
+// inside a lambda or interval action
+if (!id(my_display).is_refreshing()) {
+    id(my_display).print(10, 10, id(my_font), "updated");
+    id(my_display).display_partial();
+}
+```
+
+> [!NOTE]
+> The first update after boot is always a full refresh — partial is blocked until a full update establishes a known panel state.
+
+#### Configuration options
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `model` | yes | — | Board model (see table above) |
+| `pca6416a_id` | yes | — | ID of the PCAL6416A expander component |
+| `address` | no | `0x48` | TPS65186 PMIC I2C address |
+| `update_interval` | no | — | How often to trigger a full refresh |
+| `full_update_every` | no | `1` | Force full refresh every N updates |
+| `grayscale_mode` | no | `false` | Enable 8-level grayscale drawing |
+| `rotation` | no | `0°` | Display rotation (0 / 90 / 180 / 270) |
+| `lambda` | no | — | Drawing lambda |
+
+---
+
+### SPI boards (Inkplate 13 / 6 Color / 2)
 
 ```yaml
 esphome:
   name: my-inkplate
   on_boot:
-    priority: -100    # run after all components initialised
+    priority: -100
     then:
       - component.update: my_display
 
@@ -52,26 +155,9 @@ display:
     it.print(10, 10, id(my_font), "Hello!");
 ```
 
-The `on_boot` trigger is needed because the display does not draw automatically on startup — `component.update` kicks off the first refresh after all components have initialised.
-
 `update_interval: never` is recommended for battery-powered use and for ACeP panels where refresh rate must be controlled. Use a `time` component or `interval:` block to trigger updates instead.
 
-### Configuration options
-
-| Key | Required | Default | Description |
-|-----|----------|---------|-------------|
-| `model` | yes | — | Board model (see table above) |
-| `update_interval` | no | — | How often to trigger a full refresh |
-| `full_update_every` | no | `1` | Trigger full refresh every N updates |
-| `rotation` | no | `0°` | Display rotation (0 / 90 / 180 / 270) |
-| `lambda` | no | — | Drawing lambda |
-
-Pin defaults match the stock Inkplate hardware. Override any pin by adding e.g. `pin_rst: GPIO4` to the display block.
-
-> [!CAUTION]
-> Inkplate 13 enforces a **30 second minimum** between full refreshes. The component will reject a shorter `update_interval` at config validation time. ACeP panels can be permanently damaged by too-frequent refreshes.
-
-### Inkplate 13 — partial update
+#### Inkplate 13 — partial update
 
 Inkplate 13 supports refreshing a subregion without a full-panel redraw:
 
@@ -83,6 +169,21 @@ if (!id(my_display).is_busy()) {
     id(my_display).display_partial(x, y, w, h);
 }
 ```
+
+#### Configuration options
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `model` | yes | — | Board model (see table above) |
+| `update_interval` | no | — | How often to trigger a full refresh |
+| `full_update_every` | no | `1` | Trigger full refresh every N updates |
+| `rotation` | no | `0°` | Display rotation (0 / 90 / 180 / 270) |
+| `lambda` | no | — | Drawing lambda |
+
+Pin defaults match stock Inkplate hardware. Override any pin by adding e.g. `pin_rst: GPIO4` to the display block.
+
+> [!CAUTION]
+> Inkplate 13 enforces a **30 second minimum** between full refreshes. The component will reject a shorter `update_interval` at config validation time. ACeP panels can be permanently damaged by too-frequent refreshes.
 
 ---
 
