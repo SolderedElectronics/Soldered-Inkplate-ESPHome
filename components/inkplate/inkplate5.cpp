@@ -20,13 +20,13 @@ const Inkplate5::CleanStep Inkplate5::CLEAN_SEQ[8] = {
 void Inkplate5::setup() {
   InkplateParallelBase::setup();
 
-  this->glut_  = new uint8_t[256 * 9];
-  this->glut2_ = new uint8_t[256 * 9];
+  this->glut_  = new uint8_t[256 * this->grayscale_phases_];
+  this->glut2_ = new uint8_t[256 * this->grayscale_phases_];
   if (this->glut_ == nullptr || this->glut2_ == nullptr) {
     ESP_LOGE(TAG, "GLUT alloc failed");
     return;
   }
-  for (int j = 0; j < 9; ++j) {
+  for (int j = 0; j < this->grayscale_phases_; ++j) {
     for (int i = 0; i < 256; ++i) {
       uint8_t v = (uint8_t)(((uint32_t)INKPLATE5_WAVEFORM3BIT[i & 0x07][j] << 2u) |
                              (uint32_t)INKPLATE5_WAVEFORM3BIT[(i >> 4) & 0x07][j]);
