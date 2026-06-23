@@ -1,0 +1,58 @@
+esphome:
+  name: inkplate4-grayscale
+  friendly_name: Inkplate 4 Grayscale
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+# I2C bus — shared by TPS65186 (PMIC) and PCAL6416A (I/O expander)
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 100000
+
+# Internal I/O expander (PCAL6416A) — address 0x20
+pca6416a:
+  id: inkplate_pcal
+  i2c_id: i2c_bus
+  address: 0x20
+
+display:
+  platform: inkplate
+  model: inkplate4
+  id: my_inkplate4
+  i2c_id: i2c_bus
+  address: 0x48
+  pca6416a_id: inkplate_pcal
+  update_interval: never
+  lambda: |-
+    it.fill(COLOR_OFF);
+
+# Grayscale gradient: 8 bands × 75px across 600px width, full 600px height.
+# Color(i, i, i) uses low 3 bits of red channel as 3-bit grayscale level (0–7).
+interval:
+  - interval: 30s
+    then:
+      - lambda: |-
+          id(my_inkplate4).set_grayscale_mode(true);
+          for (int i = 0; i < 8; i++) {
+            id(my_inkplate4).filled_rectangle(i * 75, 0, 75, 600, Color(i, i, i));
+          }
+          id(my_inkplate4).display_grayscale();
+          id(my_inkplate4).set_grayscale_mode(false);

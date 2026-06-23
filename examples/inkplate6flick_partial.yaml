@@ -1,0 +1,59 @@
+esphome:
+  name: inkplate6flick-partial
+  friendly_name: Inkplate 6FLICK Partial
+  on_boot:
+    priority: -100
+    then:
+      - component.update: my_inkplate6flick
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 100000
+
+pca6416a:
+  id: inkplate_pcal
+  i2c_id: i2c_bus
+  address: 0x20
+
+display:
+  platform: inkplate
+  model: inkplate6flick
+  id: my_inkplate6flick
+  i2c_id: i2c_bus
+  address: 0x48
+  pca6416a_id: inkplate_pcal
+  update_interval: never
+  lambda: |-
+    it.fill(COLOR_OFF);
+    it.filled_rectangle(0, 0, 1024, 758, COLOR_ON);
+    it.filled_rectangle(10, 10, 1004, 738, COLOR_OFF);
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          static bool state = false;
+          state = !state;
+          id(my_inkplate6flick).filled_rectangle(412, 279, 200, 200,
+              state ? COLOR_ON : COLOR_OFF);
+          id(my_inkplate6flick).display_partial();

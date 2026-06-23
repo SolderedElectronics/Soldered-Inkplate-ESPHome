@@ -1,0 +1,84 @@
+esphome:
+  name: inkplate6-upstream-gs
+  friendly_name: Inkplate 6 Upstream Grayscale
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+  cpu_frequency: 240MHz  # required by official inkplate component
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 100000
+
+# PCAL6416A I/O expander (internal, address 0x20 on Inkplate6 V2)
+pca6416a:
+  - id: inkplate_pcal
+    i2c_id: i2c_bus
+    address: 0x20
+
+display:
+  - platform: inkplate
+    model: inkplate_6_v2
+    id: my_inkplate6
+    i2c_id: i2c_bus
+    address: 0x48
+    greyscale: true
+    partial_updating: false
+    full_update_every: 1
+    update_interval: 30s
+
+    # Direct ESP32 GPIO pins
+    ckv_pin: GPIO32
+    sph_pin: GPIO33
+
+    # Default pins (cl=GPIO0, le=GPIO2, data=GPIO4/5/18/19/23/25/26/27)
+    # omitted — schema defaults match Inkplate6 V2 hardware
+
+    # Expander-connected control pins (PCAL6416A pin numbers)
+    oe_pin:
+      pca6416a: inkplate_pcal
+      number: 0
+      mode: { output: true }
+    gmod_pin:
+      pca6416a: inkplate_pcal
+      number: 1
+      mode: { output: true }
+    spv_pin:
+      pca6416a: inkplate_pcal
+      number: 2
+      mode: { output: true }
+    wakeup_pin:
+      pca6416a: inkplate_pcal
+      number: 3
+      mode: { output: true }
+    powerup_pin:
+      pca6416a: inkplate_pcal
+      number: 4
+      mode: { output: true }
+    vcom_pin:
+      pca6416a: inkplate_pcal
+      number: 5
+      mode: { output: true }
+    gpio0_enable_pin:
+      pca6416a: inkplate_pcal
+      number: 8
+      mode: { output: true }
+
+    lambda: |-
+      // 8 grayscale bands — colors 0-255 mapped to 3-bit levels internally
+      for (int i = 0; i < 8; i++) {
+        int gray = (i * 255) / 7;
+        it.filled_rectangle(i * 100, 0, 100, 600, Color(gray, gray, gray));
+      }

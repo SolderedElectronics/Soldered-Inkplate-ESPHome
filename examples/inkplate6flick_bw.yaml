@@ -1,0 +1,49 @@
+esphome:
+  name: inkplate6flick-bw
+  friendly_name: Inkplate 6FLICK B&W
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 100000
+
+pca6416a:
+  id: inkplate_pcal
+  i2c_id: i2c_bus
+  address: 0x20
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_body
+    size: 48
+
+display:
+  platform: inkplate
+  model: inkplate6flick
+  id: my_inkplate6flick
+  i2c_id: i2c_bus
+  address: 0x48
+  pca6416a_id: inkplate_pcal
+  update_interval: 60s
+  lambda: |-
+    it.fill(COLOR_OFF);
+    it.print(512, 379, id(font_body), COLOR_ON, display::TextAlign::CENTER, "Hello World");

@@ -1,0 +1,60 @@
+esphome:
+  name: inkplate4-partial
+  friendly_name: Inkplate 4 Partial
+  on_boot:
+    priority: -100
+    then:
+      - component.update: my_inkplate4
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 100000
+
+pca6416a:
+  id: inkplate_pcal
+  i2c_id: i2c_bus
+  address: 0x20
+
+display:
+  platform: inkplate
+  model: inkplate4
+  id: my_inkplate4
+  i2c_id: i2c_bus
+  address: 0x48
+  pca6416a_id: inkplate_pcal
+  update_interval: never
+  lambda: |-
+    it.fill(COLOR_OFF);
+    it.filled_rectangle(0, 0, 600, 600, COLOR_ON);
+    it.filled_rectangle(10, 10, 580, 580, COLOR_OFF);
+
+# Every 10 s: toggle a 200×200 rectangle via partial update.
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          static bool state = false;
+          state = !state;
+          id(my_inkplate4).filled_rectangle(200, 200, 200, 200,
+              state ? COLOR_ON : COLOR_OFF);
+          id(my_inkplate4).display_partial();
