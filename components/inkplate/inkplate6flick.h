@@ -8,14 +8,14 @@ namespace esphome::inkplate {
 // Source: Inkplate6FLICKDriver waveforms.h WAVEFORM3BIT
 // 9 phases — grayscale_phases must be 9.
 static const uint8_t INKPLATE6FLICK_WAVEFORM3BIT[8][9] = {
-    {0, 0, 0, 0, 0, 1, 1, 1, 0},
-    {0, 0, 1, 2, 1, 1, 2, 1, 0},
-    {0, 1, 1, 2, 1, 1, 1, 2, 0},
-    {1, 1, 1, 2, 2, 1, 1, 2, 0},
-    {1, 1, 1, 2, 1, 2, 1, 2, 0},
-    {0, 1, 1, 2, 1, 2, 1, 2, 0},
-    {1, 2, 1, 1, 2, 2, 1, 2, 0},
-    {0, 0, 0, 0, 0, 0, 0, 2, 0},
+    /* C0 gray0 */  { 0, 1, 1, 1, 2, 1, 2, 1, 0 },
+    /* C1 gray1 */  { 0, 0, 2, 2, 2, 0, 1, 1, 0 },
+    /* C2 gray2 */  { 2, 2, 2, 0, 0, 1, 2, 1, 0 },
+    /* C3 gray3 */  { 1, 1, 1, 0, 1, 1, 1, 2, 0 },
+    /* C4 gray4 */  { 1, 1, 2, 0, 1, 1, 1, 2, 0 },
+    /* C5 gray5 */  { 0, 1, 2, 1, 1, 1, 0, 2, 0 },
+    /* C6 gray6 */  { 0, 1, 2, 1, 1, 2, 1, 2, 0 },
+    /* C7 gray7 */  { 0, 0, 0, 0, 0, 0, 0, 2, 0 }   
 };
 
 class Inkplate6FLICK : public InkplateParallelBase {
