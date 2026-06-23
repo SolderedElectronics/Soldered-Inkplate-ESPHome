@@ -33,12 +33,10 @@ namespace esphome::inkplate {
 // Inherits i2c::I2CDevice for direct TPS65186 PMIC register access (address 0x48).
 //
 // Refresh state machine:
-//   POWER_ON → INIT → PON → WAIT_PON → TRANSFER → REFRESH
-//   → WAIT_REFRESH → POWER_OFF → DEEP_SLEEP → IDLE
+//   POWER_ON → TRANSFER → POWER_OFF → IDLE
 //
 // Parallel Inkplates have no panel BUSY line and no SPI controller; timing is
-// driven by the ESP32 I2S DMA peripheral.  INIT / PON / WAIT_PON / REFRESH /
-// WAIT_REFRESH / DEEP_SLEEP are no-ops — subclasses only implement TRANSFER.
+// driven by the ESP32 I2S DMA peripheral.
 class InkplateParallelBase : public display::DisplayBuffer,
                               public i2c::I2CDevice {
  public:
@@ -84,14 +82,8 @@ class InkplateParallelBase : public display::DisplayBuffer,
   enum State {
     STATE_IDLE,
     STATE_POWER_ON,
-    STATE_INIT,
-    STATE_PON,
-    STATE_WAIT_PON,
     STATE_TRANSFER,
-    STATE_REFRESH,
-    STATE_WAIT_REFRESH,
     STATE_POWER_OFF,
-    STATE_DEEP_SLEEP,
   };
 
   enum PowerOnSub {
@@ -147,9 +139,6 @@ class InkplateParallelBase : public display::DisplayBuffer,
   // GPIO init + I2S pin routing + TPS65186 power-up sequence.
   // Called every loop() tick in STATE_POWER_ON; return true when done.
   bool do_power_on_step_();
-
-  // Optional one-shot init per cycle (e.g. LUT calculation). Default: no-op.
-  virtual void do_init_() {}
 
   // Send pixel data via I2S DMA (clean + waveform phases).
   // Called every loop() tick in STATE_TRANSFER; return true when done.

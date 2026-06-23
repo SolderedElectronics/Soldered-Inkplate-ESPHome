@@ -99,7 +99,7 @@ void InkplateParallelBase::on_safe_shutdown() {
 }
 
 // ---------------------------------------------------------------------------
-// Pixel drawing — 1bpp LSB-first (matches Arduino pixelMaskLUT)
+// Pixel drawing — 1bpp LSB-first
 // ---------------------------------------------------------------------------
 
 void InkplateParallelBase::draw_absolute_pixel_internal(int x, int y, Color color) {
@@ -493,7 +493,6 @@ void InkplateParallelBase::i2s_pin_release_() {
 
 // ---------------------------------------------------------------------------
 // vscan_start_ — vertical scan start handshake
-// Mirrors EPDDriver::vscan_start() from the Arduino library.
 // ---------------------------------------------------------------------------
 
 void InkplateParallelBase::vscan_start_() {
@@ -514,7 +513,6 @@ void InkplateParallelBase::vscan_start_() {
 
 // ---------------------------------------------------------------------------
 // vscan_end_ — latch current row into the EPD shift register
-// Mirrors EPDDriver::vscan_end() from the Arduino library.
 // ---------------------------------------------------------------------------
 
 void InkplateParallelBase::vscan_end_() {
@@ -595,47 +593,16 @@ void InkplateParallelBase::process_state_() {
 
     case STATE_POWER_ON:
       if (!this->do_power_on_step_()) return;
-      this->set_state_(STATE_INIT);
-      break;
-
-    case STATE_INIT:
-      this->do_init_();
-      this->set_state_(STATE_PON);
-      break;
-
-    // PON and WAIT_PON are no-ops for I2S Inkplates: power-up is fully
-    // handled inside do_power_on_step_() sub-states.
-    case STATE_PON:
-      this->set_state_(STATE_WAIT_PON);
-      break;
-
-    case STATE_WAIT_PON:
       this->set_state_(STATE_TRANSFER);
       break;
 
     case STATE_TRANSFER:
       if (!this->do_transfer_step_()) return;
-      this->set_state_(STATE_REFRESH);
-      break;
-
-    // REFRESH and WAIT_REFRESH are no-ops: the waveform is baked into
-    // do_transfer_step_() — no separate "trigger refresh" command needed.
-    case STATE_REFRESH:
-      this->set_state_(STATE_WAIT_REFRESH);
-      break;
-
-    case STATE_WAIT_REFRESH:
       this->set_state_(STATE_POWER_OFF);
       break;
 
     case STATE_POWER_OFF:
       if (!this->do_power_off_step_()) return;
-      this->set_state_(STATE_DEEP_SLEEP);
-      break;
-
-    // DEEP_SLEEP is a no-op for parallel Inkplates: there is no EPD
-    // controller to send a sleep command to.
-    case STATE_DEEP_SLEEP:
       this->set_state_(STATE_IDLE);
       break;
   }
