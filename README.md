@@ -11,11 +11,14 @@ ESPHome external component for Inkplate e-paper displays.
 
 | Model | Resolution | Colors | Partial update | Grayscale | MCU |
 |-------|-----------|--------|----------------|-----------|-----|
-| Inkplate 6 | 800 × 600 | Black / White | Yes | 8 levels | ESP32 |
-| Inkplate 4 | 600 × 600 | Black / White | Yes | 8 levels | ESP32 |
-| Inkplate 5 | 1280 × 720 | Black / White | Yes | 8 levels | ESP32 |
-| Inkplate 10 | 1200 × 825 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 6 V2 | 800 × 600 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 6 V1 | 800 × 600 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 6 PLUS | 1024 × 758 | Black / White | Yes | 8 levels | ESP32 |
 | Inkplate 6 FLICK | 1024 × 758 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 5 V2 | 1280 × 720 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 5 V1 | 960 × 540 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 4 | 600 × 600 | Black / White | Yes | 8 levels | ESP32 |
+| Inkplate 10 | 1200 × 825 | Black / White | Yes | 8 levels | ESP32 |
 
 ### SPI — `inkplate_spi` component
 
@@ -44,7 +47,7 @@ external_components:
 
 ---
 
-### Parallel boards (Inkplate 6 / 4 / 5 / 10 / 6 FLICK)
+### Parallel boards (Inkplate 6 V2 / V1 / 6 PLUS / 6 FLICK / 5 V2 / V1 / 4 / 10)
 
 Parallel boards use the `inkplate` platform. They require an I2C bus (for the TPS65186 PMIC and PCAL6416A GPIO expander) but no SPI.
 
@@ -76,7 +79,7 @@ pca6416a:
 
 display:
   platform: inkplate
-  model: inkplate6        # inkplate6 | inkplate4 | inkplate5 | inkplate10 | inkplate6flick
+  model: inkplate6v2      # inkplate6v2 | inkplate6v1 | inkplate6plus | inkplate6flick | inkplate4 | inkplate5v2 | inkplate5v1 | inkplate10
   id: my_display
   address: 0x48           # TPS65186 PMIC I2C address
   pca6416a_id: inkplate_pcal
