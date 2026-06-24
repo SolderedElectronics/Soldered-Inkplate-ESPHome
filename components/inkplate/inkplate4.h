@@ -6,16 +6,15 @@
 namespace esphome::inkplate {
 
 // Source: Inkplate4Driver waveforms.h WAVEFORM3BIT
-// Note: 8 phases (columns), not 9 — grayscale_phases must be 8.
-static const uint8_t INKPLATE4_WAVEFORM3BIT[8][8] = {
-    {0, 0, 1, 1, 1, 1, 1, 0},
-    {1, 1, 1, 2, 1, 1, 0, 0},
-    {2, 1, 1, 0, 2, 1, 1, 0},
-    {0, 0, 0, 1, 1, 1, 2, 0},
-    {2, 1, 1, 2, 1, 1, 2, 0},
-    {1, 2, 1, 1, 2, 1, 2, 0},
-    {1, 1, 1, 2, 1, 2, 2, 0},
-    {0, 0, 0, 0, 0, 2, 2, 0},
+static const uint8_t INKPLATE4_WAVEFORM3BIT[8][9] = {
+    {0, 0, 0, 1, 1, 1, 1, 1, 0},
+    {0, 1, 1, 1, 2, 1, 1, 0, 0},
+    {0, 2, 1, 1, 0, 2, 1, 1, 0},
+    {0, 0, 0, 0, 1, 1, 1, 2, 0},
+    {0, 2, 1, 1, 2, 1, 1, 2, 0},
+    {0, 1, 2, 1, 1, 2, 1, 2, 0},
+    {0, 1, 1, 1, 2, 1, 2, 2, 0},
+    {0, 0, 0, 0, 0, 0, 2, 2, 0},
 };
 
 class Inkplate4 : public InkplateParallelBase {

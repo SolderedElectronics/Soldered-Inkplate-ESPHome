@@ -19,7 +19,6 @@ const Inkplate4::CleanStep Inkplate4::CLEAN_SEQ[5] = {
 void Inkplate4::setup() {
   InkplateParallelBase::setup();
 
-  // GLUT arrays sized for 8 phases (not 9 — this board has 8-column waveform).
   this->glut_  = new uint8_t[256 * this->grayscale_phases_];
   this->glut2_ = new uint8_t[256 * this->grayscale_phases_];
   if (this->glut_ == nullptr || this->glut2_ == nullptr) {

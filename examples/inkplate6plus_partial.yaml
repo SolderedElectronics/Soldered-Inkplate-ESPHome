@@ -1,0 +1,50 @@
+esphome:
+  name: inkplate6plus-partial
+  friendly_name: Inkplate 6PLUS Partial Update
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 100000
+
+pca6416a:
+  id: inkplate_mcp
+  i2c_id: i2c_bus
+  address: 0x20
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_body
+    size: 48
+
+display:
+  platform: inkplate
+  model: inkplate6plus
+  id: my_inkplate
+  i2c_id: i2c_bus
+  address: 0x48
+  pca6416a_id: inkplate_mcp
+  full_update_every: 10
+  update_interval: 10s
+  lambda: |-
+    it.fill(COLOR_OFF);
+    it.print(512, 379, id(font_body), COLOR_ON, display::TextAlign::CENTER, "Partial Update");

@@ -64,6 +64,7 @@ class InkplateParallelBase : public display::DisplayBuffer,
   void set_pin_pwrup(GPIOPin *p)  { this->pin_pwrup_  = p; }
   void set_pin_vcom(GPIOPin *p)         { this->pin_vcom_         = p; }
   void set_pin_gpio0_enable(GPIOPin *p) { this->pin_gpio0_enable_ = p; }
+  void set_gpio0_enable_low(bool v)    { this->gpio0_enable_low_ = v; }
 
   display::DisplayType get_display_type() override {
     return this->grayscale_mode_
@@ -195,6 +196,7 @@ class InkplateParallelBase : public display::DisplayBuffer,
   GPIOPin *pin_pwrup_{nullptr};
   GPIOPin *pin_vcom_{nullptr};
   GPIOPin *pin_gpio0_enable_{nullptr};
+  bool     gpio0_enable_low_{false};
 
   int  full_update_every_{1};
   int  update_count_{0};

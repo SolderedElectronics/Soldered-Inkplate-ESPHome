@@ -1,0 +1,56 @@
+esphome:
+  name: inkplate5v1-grayscale
+  friendly_name: Inkplate 5 V1 Grayscale
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+psram:
+  mode: quad
+  speed: 40MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 100000
+
+pca6416a:
+  id: inkplate_pcal
+  i2c_id: i2c_bus
+  address: 0x20
+
+display:
+  platform: inkplate
+  model: inkplate5v1
+  id: my_inkplate5v1
+  i2c_id: i2c_bus
+  address: 0x48
+  pca6416a_id: inkplate_pcal
+  update_interval: never
+  lambda: |-
+    it.fill(COLOR_OFF);
+
+# Grayscale gradient: 8 bands x 120px across 960px width, full 540px height.
+# Color(i, i, i) uses low 3 bits of red channel as 3-bit grayscale level (0-7).
+interval:
+  - interval: 30s
+    then:
+      - lambda: |-
+          id(my_inkplate5v1).set_grayscale_mode(true);
+          for (int i = 0; i < 8; i++) {
+            id(my_inkplate5v1).filled_rectangle(i * 120, 0, 120, 540, Color(i, i, i));
+          }
+          id(my_inkplate5v1).display_grayscale();
+          id(my_inkplate5v1).set_grayscale_mode(false);

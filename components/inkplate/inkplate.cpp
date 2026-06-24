@@ -369,7 +369,7 @@ void InkplateParallelBase::tps_begin_() {
   this->pin_vcom_->digital_write(false);    // same
   if (this->pin_gpio0_enable_) {
     this->pin_gpio0_enable_->pin_mode(gpio::FLAG_OUTPUT);
-    this->pin_gpio0_enable_->digital_write(true);
+    this->pin_gpio0_enable_->digital_write(!this->gpio0_enable_low_);
   }
   this->pin_wakeup_->digital_write(true);
   delay(1);
