@@ -26,7 +26,7 @@ InkplateParallelModel(
 )
 
 InkplateParallelModel(
-    name="inkplate5",
+    name="inkplate5v2",
     cpp_class="Inkplate5",
     width=1280,
     height=720,

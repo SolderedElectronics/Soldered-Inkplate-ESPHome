@@ -1,6 +1,6 @@
 esphome:
-  name: inkplate5-bw
-  friendly_name: Inkplate 5 B&W
+  name: inkplate5v2-bw
+  friendly_name: Inkplate 5 V2 B&W
 
 esp32:
   framework:
@@ -38,7 +38,7 @@ font:
 
 display:
   platform: inkplate
-  model: inkplate5
+  model: inkplate5v2
   id: my_inkplate5
   i2c_id: i2c_bus
   address: 0x48
