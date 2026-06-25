@@ -1,16 +1,17 @@
 #include "esphome/core/log.h"
 #include "inkplate6flick.h"
 
+#ifdef USE_ESP32
+
 #include "esp_rom_sys.h"
 
 namespace esphome::inkplate {
 
-static const char *TAG = "inkplate6flick";
+static const char *const TAG = "inkplate6flick";
 
 // Source: Inkplate6FLICKDriver display1b() / display3b() — same 9-step sequence for both.
 const Inkplate6FLICK::CleanStep Inkplate6FLICK::CLEAN_SEQ[9] = {
-    {0, 5}, {1, 15}, {2, 1}, {0, 15},
-    {2, 1}, {1, 15}, {2, 1}, {0, 15}, {2, 1},
+    {0, 5}, {1, 15}, {2, 1}, {0, 15}, {2, 1}, {1, 15}, {2, 1}, {0, 15}, {2, 1},
 };
 
 // ---------------------------------------------------------------------------
@@ -19,19 +20,23 @@ const Inkplate6FLICK::CleanStep Inkplate6FLICK::CLEAN_SEQ[9] = {
 
 void Inkplate6FLICK::setup() {
   InkplateParallelBase::setup();
+  if (this->is_failed())
+    return;
 
-  this->glut_  = new uint8_t[256 * this->grayscale_phases_];
-  this->glut2_ = new uint8_t[256 * this->grayscale_phases_];
+  RAMAllocator<uint8_t> allocator;
+  this->glut_ = allocator.allocate(256 * this->grayscale_phases_);
+  this->glut2_ = allocator.allocate(256 * this->grayscale_phases_);
   if (this->glut_ == nullptr || this->glut2_ == nullptr) {
     ESP_LOGE(TAG, "GLUT alloc failed");
+    this->mark_failed();
     return;
   }
   for (int j = 0; j < this->grayscale_phases_; ++j) {
     for (int i = 0; i < 256; ++i) {
-      uint8_t v = (uint8_t)(((uint32_t)INKPLATE6FLICK_WAVEFORM3BIT[i & 0x07][j] << 2u) |
-                             (uint32_t)INKPLATE6FLICK_WAVEFORM3BIT[(i >> 4) & 0x07][j]);
-      this->glut_[j * 256 + i]  = v;
-      this->glut2_[j * 256 + i] = (uint8_t)(v << 4u);
+      uint8_t v = (uint8_t) (((uint32_t) INKPLATE6FLICK_WAVEFORM3BIT[i & 0x07][j] << 2u) |
+                             (uint32_t) INKPLATE6FLICK_WAVEFORM3BIT[(i >> 4) & 0x07][j]);
+      this->glut_[j * 256 + i] = v;
+      this->glut2_[j * 256 + i] = (uint8_t) (v << 4u);
     }
   }
 
@@ -42,9 +47,10 @@ void Inkplate6FLICK::setup() {
 }
 
 void Inkplate6FLICK::dump_config() {
-  ESP_LOGCONFIG(TAG, "Inkplate 6FLICK %dx%d, dark_phases=%d, partial_phases=%d, grayscale_phases=%d",
-                this->width_, this->height_, this->dark_phases_, this->partial_phases_,
-                this->grayscale_phases_);
+  ESP_LOGCONFIG(TAG, "Inkplate 6FLICK %dx%d, dark_phases=%d, partial_phases=%d, grayscale_phases=%d", this->width_,
+                this->height_, this->dark_phases_, this->partial_phases_, this->grayscale_phases_);
 }
 
 }  // namespace esphome::inkplate
+
+#endif  // USE_ESP32
