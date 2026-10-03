@@ -104,7 +104,7 @@ void InkplateBase::do_init_() {
 // ---------------------------------------------------------------------------
 
 void InkplateBase::set_state_(State s) {
-  ESP_LOGD(TAG, "state %d → %d", (int) this->state_, (int) s);
+  ESP_LOGD(TAG, "state %s → %s", LOG_STR_ARG(get_state_name(this->state_)), LOG_STR_ARG(get_state_name(s)));
   this->state_          = s;
   this->state_start_ms_ = App.get_loop_component_start_time();
   if (s == STATE_IDLE) this->disable_loop();

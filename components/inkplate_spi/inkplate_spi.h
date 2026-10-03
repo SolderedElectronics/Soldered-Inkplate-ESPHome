@@ -71,6 +71,12 @@ class InkplateBase : public display::DisplayBuffer,
     STATE_DEEP_SLEEP,
   };
 
+  PROGMEM_STRING_TABLE(InkplateSpiStateStrings, "IDLE", "POWER_ON", "INIT", "PON", "WAIT_PON", "TRANSFER", "REFRESH", "WAIT_REFRESH", "POWER_OFF", "DEEP_SLEEP", "UNKNOWN");
+
+  const LogString *get_state_name(State state) {
+    return InkplateSpiStateStrings::get_log_str(static_cast<uint8_t>(state), InkplateSpiStateStrings::LAST_INDEX);
+  }
+
   int get_width_internal()  override { return this->width_; }
   int get_height_internal() override { return this->height_; }
 
