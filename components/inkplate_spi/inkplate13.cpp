@@ -33,10 +33,14 @@ static constexpr uint8_t NULL_PTLW[9] = {
 
 void Inkplate13::dump_config() {
   ESP_LOGCONFIG(TAG, "Inkplate 13 Spectra %dx%d", this->width_, this->height_);
-  ESP_LOGCONFIG(TAG, "  RST=%d DC=%d BUSY=%d PWR_EN=%d",
-               this->pin_rst_, this->pin_dc_, this->pin_busy_, this->pin_pwr_en_);
-  ESP_LOGCONFIG(TAG, "  CS_M=%d CS_S=%d BS0=%d BS1=%d",
-               this->pin_cs_m_, this->pin_cs_s_, this->pin_bs0_, this->pin_bs1_);
+  LOG_PIN("  Reset Pin: ", this->pin_rst_);
+  LOG_PIN("  DC Pin: ", this->pin_dc_);
+  LOG_PIN("  Busy Pin: ", this->pin_busy_);
+  LOG_PIN("  Enable Pin: ", this->pin_pwr_en_);
+  LOG_PIN("  CS_M Pin: ", this->pin_cs_m_);
+  LOG_PIN("  CS_S Pin: ", this->pin_cs_s_);
+  LOG_PIN("  BS0 Pin: ", this->pin_bs0_);
+  LOG_PIN("  BS1 Pin: ", this->pin_bs1_);
 }
 
 // ---------------------------------------------------------------------------
