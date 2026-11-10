@@ -1,0 +1,65 @@
+esphome:
+  name: inkplate7spectra-test
+  friendly_name: Inkplate 7 Spectra Test
+  on_boot:
+    priority: -100  # run after all components initialised
+    then:
+      - component.update: my_inkplate7spectra
+
+esp32:
+  framework:
+    type: esp-idf
+  variant: esp32s3
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  baud_rate: 115200
+  hardware_uart: UART0
+
+spi:
+  id: spi_display
+  clk_pin: GPIO38
+  mosi_pin: GPIO40
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 48
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 24
+
+display:
+  platform: inkplate_spi
+  model: inkplate7spectra
+  id: my_inkplate7spectra
+  spi_id: spi_display
+  rotation: 180  # panel is mounted rotated by 180 degrees
+  update_interval: 60s
+  lambda: |-
+    const Color C_BLACK  = Color(0,   0,   0  );
+    const Color C_WHITE  = Color(255, 255, 255);
+    const Color C_RED    = Color(255, 0,   0  );
+    const Color C_GREEN  = Color(0,   200, 0  );
+    const Color C_BLUE   = Color(0,   0,   255);
+    const Color C_YELLOW = Color(255, 255, 0  );
+
+    it.fill(C_WHITE);
+    it.print(20, 20, id(font_title), C_BLACK, "Inkplate 7 Spectra");
+
+    Color swatches[] = {C_BLACK, C_WHITE, C_RED, C_GREEN, C_BLUE, C_YELLOW};
+    const char *names[] = {"Black", "White", "Red", "Green", "Blue", "Yellow"};
+    const int W = it.get_width() / 6;
+    for (int i = 0; i < 6; i++) {
+      it.filled_rectangle(i * W, 120, W, 300, swatches[i]);
+      it.rectangle(i * W, 120, W, 300, C_BLACK);
+      it.print(i * W + 10, 430, id(font_small), C_BLACK, names[i]);
+    }

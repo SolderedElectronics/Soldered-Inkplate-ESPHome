@@ -25,6 +25,7 @@ ESPHome external component for Inkplate e-paper displays.
 | Model | Resolution | Colors | Partial update | MCU | PSRAM |
 |-------|-----------|--------|----------------|-----|-------|
 | Inkplate 13 | 1200 × 1600 | 6-color ACeP | Yes | ESP32-S3 | Octal, 80 MHz |
+| Inkplate 7 Spectra | 800 × 480 | 6-color ACeP | No | ESP32-S3 | Octal, 80 MHz |
 | Inkplate 6 Color | 600 × 448 | 7-color ACeP | No | ESP32 | Quad, 40 MHz |
 | Inkplate 2 | 104 × 212 | Black / White / Red | No | ESP32 | Quad, 40 MHz |
 
@@ -134,7 +135,7 @@ if (!id(my_display).is_refreshing()) {
 
 ---
 
-### SPI boards (Inkplate 13 / 6 Color / 2)
+### SPI boards (Inkplate 13 / 7 Spectra / 6 Color / 2)
 
 ```yaml
 esphome:
@@ -150,7 +151,7 @@ spi:
 
 display:
   platform: inkplate_spi
-  model: inkplate13         # inkplate13 | inkplate6color | inkplate2
+  model: inkplate13         # inkplate13 | inkplate7spectra | inkplate6color | inkplate2
   id: my_display
   update_interval: never    # trigger manually; use a time interval for auto-refresh
   lambda: |-
@@ -186,7 +187,7 @@ if (!id(my_display).is_busy()) {
 Pin defaults match stock Inkplate hardware. Override any pin by adding e.g. `pin_rst: GPIO4` to the display block.
 
 > [!CAUTION]
-> Inkplate 13 enforces a **30 second minimum** between full refreshes. The component will reject a shorter `update_interval` at config validation time. ACeP panels can be permanently damaged by too-frequent refreshes.
+> Inkplate 13 and Inkplate 7 Spectra enforce a **30 second minimum** between full refreshes. The component will reject a shorter `update_interval` at config validation time. ACeP panels can be permanently damaged by too-frequent refreshes.
 
 ---
 
